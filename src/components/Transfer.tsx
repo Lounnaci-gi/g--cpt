@@ -15,12 +15,21 @@ const Transfer: React.FC = () => {
   const [transferDate, setTransferDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [success, setSuccess] = useState(false);
 
-  // Sync initial source with first available location if empty or invalid
+  // List of locations that actually have available stock to transfer
+  const activeLocations = React.useMemo(() => {
+    return locations.filter(l => 
+      meters.filter(m => m.location === l.name && m.status !== 'Installé').length > 0
+    );
+  }, [locations, meters]);
+
+  // Sync initial source with first available active location
   React.useEffect(() => {
-    if (locations.length > 0 && !locations.some(l => l.name === source)) {
-      setSource(locations[0].name);
+    if (activeLocations.length > 0 && !activeLocations.some(l => l.name === source)) {
+      setSource(activeLocations[0].name);
+    } else if (activeLocations.length === 0 && source !== '') {
+      setSource('');
     }
-  }, [locations, source]);
+  }, [activeLocations, source]);
 
   // Batch Selection State
   const [rangeStart, setRangeStart] = useState('');
@@ -220,7 +229,18 @@ const Transfer: React.FC = () => {
                     placeholder="QTÉ"
                     className="bg-white/50 border border-water-100 p-3 font-mono text-xs uppercase rounded-xl focus:outline-none"
                     value={batchQuantity}
-                    onChange={(e) => setBatchQuantity(e.target.value === '' ? '' : Number(e.target.value))}
+                    onChange={(e) => {
+                      if (e.target.value === '') {
+                        setBatchQuantity('');
+                        return;
+                      }
+                      const val = Number(e.target.value);
+                      const availableCount = batchDiameter 
+                        ? availableMetersAtSource.filter(m => m.diameter === batchDiameter && !selectedMeters.includes(m.id)).length 
+                        : 0;
+                      // Clamp to max available stock
+                      setBatchQuantity(val > availableCount ? availableCount : (val < 0 ? 0 : val));
+                    }}
                   />
                 </div>
                 <button 
@@ -322,10 +342,15 @@ const Transfer: React.FC = () => {
                     setSelectedMeters([]);
                     if (destination === e.target.value) setDestination('');
                   }}
+                  disabled={activeLocations.length === 0}
                 >
-                  {locations.map(l => (
-                    <option key={l.name} value={l.name}>{l.name} ({l.type === 'Antenne' ? `Antenne de ${l.parentAgency}` : 'Agence'})</option>
-                  ))}
+                  {activeLocations.length === 0 ? (
+                    <option value="">AUCUN STOCK DISPONIBLE (SOURCES VIDES)</option>
+                  ) : (
+                    activeLocations.map(l => (
+                      <option key={l.name} value={l.name}>{l.name} ({l.type === 'Antenne' ? `Antenne de ${l.parentAgency}` : 'Agence'})</option>
+                    ))
+                  )}
                 </select>
               </div>
               <div className="flex flex-col gap-2">
