@@ -6,7 +6,7 @@ import { LocationType } from '../types';
 import Swal from 'sweetalert2';
 
 const Settings: React.FC = () => {
-  const { locations, addLocation, editLocation } = useStock();
+  const { locations, meters, addLocation, editLocation } = useStock();
   
   // Add Location State
   const [showAddForm, setShowAddForm] = useState(false);
@@ -360,80 +360,147 @@ const Settings: React.FC = () => {
             </span>
           </div>
 
-          <div className="grid grid-cols-1 gap-3">
-            {locations.length === 0 ? (
-              <div className="text-center p-10 border-2 border-dashed border-water-200 rounded-2xl">
-                <MapPin className="w-12 h-12 mx-auto text-water-300 mb-3" />
-                <p className="font-mono text-xs uppercase text-water-400">Aucune localisation configurée</p>
-                <p className="font-mono text-[10px] text-water-300 mt-1">Cliquez sur "Ajouter" pour commencer</p>
-              </div>
-            ) : (
-              locations
-                .sort((a, b) => {
-                  if (a.type === 'Agence' && b.type !== 'Agence') return -1;
-                  if (a.type !== 'Agence' && b.type === 'Agence') return 1;
-                  return a.name.localeCompare(b.name);
-                })
-                .map((loc) => (
-                  <div key={loc.name} className="flex items-center justify-between p-4 bg-white/50 border border-water-100 rounded-2xl hover:bg-white transition-all group">
-                    {editingLocation === loc.name ? (
-                      <div className="flex-1 flex gap-2 animate-in slide-in-from-left-2 duration-200">
-                        <input 
-                          type="text" 
-                          className="flex-1 bg-white border border-water-200 p-2 font-mono text-sm uppercase focus:outline-none rounded-lg"
-                          value={editName}
-                          onChange={(e) => setEditName(e.target.value)}
-                          autoFocus
-                        />
-                        <button 
-                          onClick={() => handleEditLocation(loc.name)}
-                          className="p-2 bg-water-600 text-white rounded-lg hover:bg-water-700"
-                        >
-                          <Check className="w-4 h-4" />
-                        </button>
-                        <button 
-                          onClick={() => setEditingLocation(null)}
-                          className="p-2 bg-water-100 text-water-400 rounded-lg hover:bg-water-200"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      </div>
-                    ) : (
-                      <>
-                        <div className="flex items-center gap-3">
-                          {loc.type === 'Agence' ? (
-                            <Building2 className="w-5 h-5 text-water-600" />
-                          ) : (
-                            <Radio className="w-5 h-5 text-water-500" />
-                          )}
-                          <div>
-                            <span className="font-mono text-sm uppercase text-water-800 font-bold">
-                              {loc.name}
-                            </span>
-                            <span className="text-[10px] text-water-500 ml-2 block">
-                              {loc.type}
-                              {loc.parentAgency && (
-                                <span className="text-water-400"> → {loc.parentAgency}</span>
-                              )}
-                            </span>
+          <div className="overflow-x-auto rounded-2xl border border-water-100 bg-white/40">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-water-50/50 border-b border-water-100">
+                  <th className="py-4 px-6 font-mono text-[10px] uppercase text-water-500 font-bold w-1/2">Agence</th>
+                  <th className="py-4 px-6 font-mono text-[10px] uppercase text-water-500 font-bold w-1/2 border-l border-water-100">Antennes Rattachées</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-water-100">
+                {agencies.length === 0 ? (
+                  <tr>
+                    <td colSpan={2} className="p-10 text-center">
+                      <MapPin className="w-12 h-12 mx-auto text-water-300 mb-3" />
+                      <p className="font-mono text-xs uppercase text-water-400">Aucune localisation configurée</p>
+                      <p className="font-mono text-[10px] text-water-300 mt-1">Cliquez sur "Ajouter" pour commencer</p>
+                    </td>
+                  </tr>
+                ) : (
+                  agencies.sort((a, b) => a.name.localeCompare(b.name)).map((agency) => (
+                    <tr key={agency.name} className="hover:bg-white/60 transition-all group/agency">
+                      <td className="py-4 px-6 align-top border-r border-water-100">
+                        {editingLocation === agency.name ? (
+                          <div className="flex items-center gap-2 animate-in slide-in-from-left-2 duration-200">
+                            <input 
+                              type="text" 
+                              className="w-full bg-white border border-water-200 p-2 font-mono text-sm uppercase focus:outline-none rounded-lg"
+                              value={editName}
+                              onChange={(e) => setEditName(e.target.value)}
+                              autoFocus
+                            />
+                            <button 
+                              onClick={() => handleEditLocation(agency.name)}
+                              className="p-2 bg-water-600 text-white rounded-lg hover:bg-water-700 shrink-0"
+                            >
+                              <Check className="w-4 h-4" />
+                            </button>
+                            <button 
+                              onClick={() => setEditingLocation(null)}
+                              className="p-2 bg-water-100 text-water-400 rounded-lg hover:bg-water-200 shrink-0"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
                           </div>
+                        ) : (
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <Building2 className="w-5 h-5 text-water-600" />
+                              <span className="font-mono text-sm uppercase text-water-900 font-bold">{agency.name}</span>
+                              <span className={cn(
+                                "ml-2 text-[10px] font-mono uppercase px-2 py-0.5 rounded-full border",
+                                meters.filter(m => m.location === agency.name && m.status === 'Neuf').length > 0 
+                                  ? "bg-emerald-50 text-emerald-600 border-emerald-200" 
+                                  : "bg-slate-50 text-slate-400 border-slate-200"
+                              )}>
+                                STOCK: {meters.filter(m => m.location === agency.name && m.status === 'Neuf').length}
+                              </span>
+                            </div>
+                            <button 
+                              onClick={() => {
+                                setEditingLocation(agency.name);
+                                setEditName(agency.name);
+                                setEditType(agency.type);
+                                setEditParentAgency(agency.parentAgency || '');
+                              }}
+                              className="p-2 text-water-300 hover:text-water-600 hover:bg-water-50 rounded-lg transition-all opacity-0 group-hover/agency:opacity-100"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                      <td className="py-4 px-6 align-top">
+                        <div className="space-y-1">
+                          {locations.filter(l => l.type === 'Antenne' && l.parentAgency === agency.name).length === 0 ? (
+                            <div className="text-[10px] uppercase text-water-400 font-mono py-2">
+                              Aucune antenne rattachée
+                            </div>
+                          ) : (
+                            locations.filter(l => l.type === 'Antenne' && l.parentAgency === agency.name)
+                              .sort((a, b) => a.name.localeCompare(b.name))
+                              .map(antenne => (
+                                <div key={antenne.name} className="flex items-center justify-between p-2 hover:bg-white/80 rounded-lg group/antenne transition-all">
+                                  {editingLocation === antenne.name ? (
+                                    <div className="w-full flex items-center gap-2 animate-in slide-in-from-left-2 duration-200">
+                                      <input 
+                                        type="text" 
+                                        className="w-full bg-white border border-water-200 p-1.5 font-mono text-xs uppercase focus:outline-none rounded-md"
+                                        value={editName}
+                                        onChange={(e) => setEditName(e.target.value)}
+                                        autoFocus
+                                      />
+                                      <button 
+                                        onClick={() => handleEditLocation(antenne.name)}
+                                        className="p-1.5 bg-water-600 text-white rounded-md hover:bg-water-700 shrink-0"
+                                      >
+                                        <Check className="w-3.5 h-3.5" />
+                                      </button>
+                                      <button 
+                                        onClick={() => setEditingLocation(null)}
+                                        className="p-1.5 bg-water-100 text-water-400 rounded-md hover:bg-water-200 shrink-0"
+                                      >
+                                        <X className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <>
+                                      <div className="flex items-center gap-2">
+                                        <Radio className="w-4 h-4 text-water-400" />
+                                        <span className="font-mono text-xs uppercase text-water-700">{antenne.name}</span>
+                                        <span className={cn(
+                                          "ml-1 text-[9px] font-mono uppercase px-1.5 py-0.5 rounded border",
+                                          meters.filter(m => m.location === antenne.name && m.status === 'Neuf').length > 0 
+                                            ? "bg-emerald-50 text-emerald-600 border-emerald-100" 
+                                            : "bg-slate-50 text-slate-400 border-slate-100"
+                                        )}>
+                                          STOCK: {meters.filter(m => m.location === antenne.name && m.status === 'Neuf').length}
+                                        </span>
+                                      </div>
+                                      <button 
+                                        onClick={() => {
+                                          setEditingLocation(antenne.name);
+                                          setEditName(antenne.name);
+                                          setEditType(antenne.type);
+                                          setEditParentAgency(antenne.parentAgency || '');
+                                        }}
+                                        className="p-1.5 text-water-300 hover:text-water-600 hover:bg-water-100 rounded-md transition-all opacity-0 group-hover/antenne:opacity-100"
+                                      >
+                                        <Edit2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    </>
+                                  )}
+                                </div>
+                              ))
+                          )}
                         </div>
-                        <button 
-                          onClick={() => {
-                            setEditingLocation(loc.name);
-                            setEditName(loc.name);
-                            setEditType(loc.type);
-                            setEditParentAgency(loc.parentAgency || '');
-                          }}
-                          className="p-2 text-water-300 hover:text-water-600 hover:bg-water-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-                      </>
-                    )}
-                  </div>
-                ))
-            )}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
 

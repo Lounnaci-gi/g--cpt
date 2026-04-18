@@ -10,10 +10,17 @@ const Transfer: React.FC = () => {
   const { meters, locations, transferMeters } = useStock();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedMeters, setSelectedMeters] = useState<string[]>([]);
-  const [source, setSource] = useState('Agence Commerciale');
+  const [source, setSource] = useState('');
   const [destination, setDestination] = useState('');
   const [transferDate, setTransferDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [success, setSuccess] = useState(false);
+
+  // Sync initial source with first available location if empty or invalid
+  React.useEffect(() => {
+    if (locations.length > 0 && !locations.some(l => l.name === source)) {
+      setSource(locations[0].name);
+    }
+  }, [locations, source]);
 
   // Batch Selection State
   const [rangeStart, setRangeStart] = useState('');
@@ -377,7 +384,7 @@ const Transfer: React.FC = () => {
             </div>
 
             <button 
-              disabled={selectedMeters.length === 0 || !destination}
+              disabled={selectedMeters.length === 0 || !destination || source === destination}
               onClick={handleTransfer}
               className={cn(
                 "w-full py-4 font-mono uppercase tracking-widest text-sm transition-all flex items-center justify-center gap-3 rounded-2xl shadow-lg",
