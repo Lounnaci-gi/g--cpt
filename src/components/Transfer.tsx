@@ -4,6 +4,7 @@ import { Search, ArrowRight, CheckCircle2, AlertCircle, Filter, Layers, Hash, Li
 import { cn } from '../lib/utils';
 import { AVAILABLE_DIAMETERS } from '../constants';
 import { format } from 'date-fns';
+import Swal from 'sweetalert2';
 
 const Transfer: React.FC = () => {
   const { meters, locations, transferMeters } = useStock();
@@ -62,13 +63,55 @@ const Transfer: React.FC = () => {
     setBatchQuantity('');
   };
 
-  const handleTransfer = () => {
+  const handleTransfer = async () => {
     if (selectedMeters.length > 0 && destination) {
+
+      // Bloquer le transfert vers la même localisation
+      if (source === destination) {
+        Swal.fire({
+          icon: 'warning',
+          title: 'Localisation identique',
+          text: 'La source et la destination sont identiques. Veuillez choisir une localisation différente.',
+          confirmButtonText: 'OK',
+          confirmButtonColor: '#108bdd',
+        });
+        return;
+      }
+      const result = await Swal.fire({
+        icon: 'question',
+        title: 'Confirmer le transfert',
+        html: `
+          <div style="text-align:left;padding:8px">
+            <div style="background:#f0f8ff;border-radius:12px;padding:14px;margin-top:8px;font-size:13px;color:#222b38">
+              <div style="margin-bottom:8px"><strong style="color:#0872c0">📦 Compteurs :</strong> ${selectedMeters.length} sélectionné(s)</div>
+              <div style="margin-bottom:8px"><strong style="color:#0872c0">📍 Source :</strong> ${source}</div>
+              <div><strong style="color:#0872c0">➡️ Destination :</strong> ${destination}</div>
+            </div>
+          </div>
+        `,
+        showCancelButton: true,
+        confirmButtonText: '➡ Exécuter le transfert',
+        cancelButtonText: '✕ Annuler',
+        confirmButtonColor: '#108bdd',
+        cancelButtonColor: '#64748b',
+        reverseButtons: true,
+      });
+
+      if (!result.isConfirmed) return;
+
       transferMeters(selectedMeters, source, destination, transferDate);
       setSelectedMeters([]);
       setDestination('');
-      setSuccess(true);
-      setTimeout(() => setSuccess(false), 3000);
+
+      Swal.fire({
+        icon: 'success',
+        title: 'Transfert effectué !',
+        html: `<p style="color:#64748b"><strong>${selectedMeters.length}</strong> compteur(s) transféré(s) vers <strong>${destination}</strong>.</p>`,
+        confirmButtonText: 'Parfait',
+        confirmButtonColor: '#108bdd',
+        timer: 3000,
+        timerProgressBar: true,
+      });
     }
   };
 

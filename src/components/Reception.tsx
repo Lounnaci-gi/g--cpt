@@ -5,6 +5,7 @@ import { MeterType } from '../types';
 import { PackagePlus, Calendar, Hash, Tag, Activity, CheckCircle2, AlertCircle, FileText, User } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { format } from 'date-fns';
+import Swal from 'sweetalert2';
 
 const Reception: React.FC = () => {
   const { meters, receiveStock, locations } = useStock();
@@ -29,11 +30,41 @@ const Reception: React.FC = () => {
       if (serialNumber) {
         const alreadyExists = meters.some(m => m.serialNumber === serialNumber);
         if (alreadyExists) {
-          setError(`Erreur: Le numéro de série ${serialNumber} existe déjà dans le système.`);
-          setTimeout(() => setError(null), 5000);
+          Swal.fire({
+            icon: 'error',
+            title: 'Numéro de série déjà utilisé',
+            text: `Le numéro de série ${serialNumber} existe déjà dans le système.`,
+            confirmButtonText: 'OK',
+            confirmButtonColor: '#0872c0',
+          });
           return;
         }
       }
+
+      // Confirmation SweetAlert2
+      const result = await Swal.fire({
+        icon: 'question',
+        title: 'Confirmer la réception',
+        html: `
+          <div style="text-align:left;padding:8px">
+            <div style="background:#f0f8ff;border-radius:12px;padding:14px;margin-top:8px;font-size:13px;color:#222b38">
+              <div style="margin-bottom:8px"><strong style="color:#0872c0">📦 Quantité :</strong> ${quantity} compteur(s)</div>
+              <div style="margin-bottom:8px"><strong style="color:#0872c0">📏 Diamètre :</strong> ${diameter}</div>
+              <div style="margin-bottom:8px"><strong style="color:#0872c0">🔧 Type :</strong> ${type}</div>
+              <div style="margin-bottom:8px"><strong style="color:#0872c0">📍 Localisation :</strong> ${location}</div>
+              ${serialNumber ? `<div><strong style="color:#0872c0">🏷️ S/N :</strong> ${serialNumber}</div>` : ''}
+            </div>
+          </div>
+        `,
+        showCancelButton: true,
+        confirmButtonText: '✓ Enregistrer la réception',
+        cancelButtonText: '✕ Annuler',
+        confirmButtonColor: '#108bdd',
+        cancelButtonColor: '#64748b',
+        reverseButtons: true,
+      });
+
+      if (!result.isConfirmed) return;
 
       const orderInfo = orderNumber || orderDate || issuer ? {
         orderNumber,
@@ -43,9 +74,15 @@ const Reception: React.FC = () => {
 
       try {
         await receiveStock(quantity, diameter, type, date, location, serialNumber, orderInfo);
-        setSuccess(true);
-        setError(null);
-        setTimeout(() => setSuccess(false), 3000);
+        Swal.fire({
+          icon: 'success',
+          title: 'Réception enregistrée !',
+          html: `<p style="color:#64748b">${quantity} compteur(s) <strong>${diameter}</strong> ajouté(s) à <strong>${location}</strong>.</p>`,
+          confirmButtonText: 'Parfait',
+          confirmButtonColor: '#108bdd',
+          timer: 3000,
+          timerProgressBar: true,
+        });
         setQuantity(1);
         setSerialNumber('');
         setOrderNumber('');
@@ -53,8 +90,13 @@ const Reception: React.FC = () => {
         setIssuer('');
       } catch (error) {
         console.error('Error receiving stock:', error);
-        setError('Erreur lors de l\'enregistrement de la réception.');
-        setTimeout(() => setError(null), 5000);
+        Swal.fire({
+          icon: 'error',
+          title: 'Erreur',
+          text: "Une erreur est survenue lors de l'enregistrement de la réception.",
+          confirmButtonText: 'OK',
+          confirmButtonColor: '#dc2626',
+        });
       }
     }
   };

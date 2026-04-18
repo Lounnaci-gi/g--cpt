@@ -120,7 +120,7 @@ const Reporting: React.FC = () => {
       </header>
 
       {/* Filters */}
-      <div className="glass-card p-8 grid grid-cols-1 sm:grid-cols-3 gap-8 rounded-3xl">
+      <div className="glass-card p-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 rounded-3xl">
         <div className="space-y-3">
           <label className="font-mono text-[10px] uppercase text-water-500 font-bold flex items-center gap-2">
             <Calendar className="w-3 h-3" /> Type de Bilan

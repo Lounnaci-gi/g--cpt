@@ -50,7 +50,6 @@ router.get('/locations', async (req, res) => {
         l.Name
     `);
     
-    console.log(`📍 Fetched ${locations.length} locations`);
     res.json(locations);
   } catch (error) {
     console.error('❌ Error fetching locations:', error);
@@ -65,8 +64,6 @@ router.get('/locations', async (req, res) => {
 router.post('/locations', async (req, res) => {
   try {
     const { name, type, parentAgency } = req.body;
-    
-    console.log('📝 Creating location:', { name, type, parentAgency });
     
     // Validation
     if (!name || !type) {
@@ -90,7 +87,6 @@ router.post('/locations', async (req, res) => {
         { name: parentAgency }
       );
       parentAgencyId = parent[0]?.LocationId || null;
-      console.log('🔍 Parent agency ID:', parentAgencyId);
       
       if (!parentAgencyId) {
         return res.status(400).json({ 
@@ -105,7 +101,6 @@ router.post('/locations', async (req, res) => {
       { name, type, parentAgencyId }
     );
 
-    console.log('✅ Location created successfully');
     res.status(201).json({ 
       success: true, 
       message: 'Location created',
@@ -125,8 +120,6 @@ router.put('/locations/:oldName', async (req, res) => {
   try {
     const { oldName } = req.params;
     const { name, type, parentAgency } = req.body;
-
-    console.log('📝 Updating location:', { oldName, name, type, parentAgency });
 
     // Vérifier si la localisation existe
     const existing = await query<any>(
@@ -159,7 +152,7 @@ router.put('/locations/:oldName', async (req, res) => {
 
     // Utiliser une transaction pour garantir la cohérence
     const pool = await getPool();
-    const transaction = new pool.transaction();
+    const transaction = pool.transaction();
     await transaction.begin();
 
     try {
@@ -189,7 +182,6 @@ router.put('/locations/:oldName', async (req, res) => {
       }
 
       await transaction.commit();
-      console.log('✅ Location updated successfully');
       res.json({ 
         success: true,
         message: 'Location updated',
@@ -213,8 +205,6 @@ router.delete('/locations/:name', async (req, res) => {
   try {
     const { name } = req.params;
     
-    console.log('🗑️ Deleting location:', name);
-
     // Vérifier si la localisation existe
     const existing = await query<any>(
       `SELECT LocationId, Type FROM Locations WHERE Name = @name`,
@@ -261,7 +251,6 @@ router.delete('/locations/:name', async (req, res) => {
       { name }
     );
 
-    console.log('✅ Location deleted successfully');
     res.json({ 
       success: true,
       message: 'Location deleted'
@@ -316,7 +305,6 @@ router.get('/meters', async (req, res) => {
     sql += ` ORDER BY m.LastUpdate DESC`;
     
     const meters = await query(sql, params);
-    console.log(`📊 Fetched ${meters.length} meters`);
     res.json(meters);
   } catch (error) {
     console.error('❌ Error fetching meters:', error);
@@ -332,7 +320,6 @@ router.post('/meters', async (req, res) => {
   try {
     const { serialNumber, diameter, type, status, location } = req.body;
     
-    console.log('📝 Creating meter:', { serialNumber, diameter, type, status, location });
 
     // Validation
     if (!serialNumber || !diameter || !type || !status) {
@@ -364,7 +351,6 @@ router.post('/meters', async (req, res) => {
       { serialNumber, diameter, type, status, locationId }
     );
 
-    console.log('✅ Meter created successfully');
     res.status(201).json({ 
       success: true, 
       message: 'Meter created',
@@ -501,14 +487,13 @@ router.get('/movements', async (req, res) => {
       } : null
     }));
     
-    console.log(`🔄 Fetched ${transformed.length} movements`);
     res.json(transformed);
   } catch (error) {
     console.error('❌ Error fetching movements:', error);
-    // TEMPORAIRE: Retourner tableau vide au lieu d'erreur 500
-    // Le temps que le script SQL soit exécuté
-    console.warn('⚠️ Table Movements incorrecte - Exécutez fix_movements_table.sql');
-    res.json([]);
+    res.status(500).json({
+      error: 'Failed to fetch movements',
+      details: error instanceof Error ? error.message : String(error)
+    });
   }
 });
 
@@ -517,13 +502,6 @@ router.post('/movements', async (req, res) => {
   try {
     const movement = req.body;
     
-    console.log('🔄 Creating movement:', {
-      type: movement.type,
-      source: movement.source,
-      destination: movement.destination,
-      serialNumber: movement.serialNumber
-    });
-
     // Validation
     if (!movement.type || !movement.source || !movement.destination || !movement.serialNumber) {
       return res.status(400).json({ 
@@ -564,7 +542,6 @@ router.post('/movements', async (req, res) => {
       }
     );
 
-    console.log('✅ Movement created successfully');
     res.status(201).json({ 
       success: true, 
       message: 'Movement created'
@@ -608,7 +585,6 @@ router.get('/thresholds', async (req, res) => {
       ORDER BY Diameter, MeterType
     `);
     
-    console.log(`⚠️ Fetched ${thresholds.length} thresholds`);
     res.json(thresholds);
   } catch (error) {
     console.error('❌ Error fetching thresholds:', error);
@@ -624,7 +600,6 @@ router.put('/thresholds', async (req, res) => {
   try {
     const { diameter, type, minQuantity } = req.body;
     
-    console.log('⚠️ Updating threshold:', { diameter, type, minQuantity });
 
     // Validation
     if (!diameter || !type || minQuantity === undefined) {
@@ -648,7 +623,6 @@ router.put('/thresholds', async (req, res) => {
       { diameter, type, minQuantity }
     );
 
-    console.log('✅ Threshold updated successfully');
     res.json({ 
       success: true, 
       message: 'Threshold updated',
@@ -668,8 +642,6 @@ router.delete('/thresholds/:diameter/:type', async (req, res) => {
   try {
     const { diameter, type } = req.params;
     
-    console.log('🗑️ Deleting threshold:', { diameter, type });
-
     const result = await execute(
       `DELETE FROM Thresholds WHERE Diameter = @diameter AND MeterType = @type`,
       { diameter, type }
@@ -682,7 +654,6 @@ router.delete('/thresholds/:diameter/:type', async (req, res) => {
       });
     }
 
-    console.log('✅ Threshold deleted successfully');
     res.json({ 
       success: true, 
       message: 'Threshold deleted'

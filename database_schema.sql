@@ -1,9 +1,9 @@
 -- ==========================================================
--- SCRIPT DE BASE DE DONNÉES SQL SERVER - H2O STOCK MANAGER
--- Soutient l'architecture de gestion de stock de compteurs
+-- SCRIPT UNIQUE - H2O STOCK MANAGER (STRUCTURE VIDE)
+-- CrÃ©e la base de donnÃ©es et les tables avec la structure finale
 -- ==========================================================
 
--- 1. Création de la Base de Données
+-- 1. CrÃ©ation de la Base de DonnÃ©es
 IF NOT EXISTS (SELECT * FROM sys.databases WHERE name = 'H2OStockDB')
 BEGIN
     CREATE DATABASE H2OStockDB;
@@ -14,14 +14,13 @@ USE H2OStockDB;
 GO
 
 -- 2. Table des Localisations (Agences et Antennes)
--- Gère la hiérarchie : une Antenne appartient à une Agence Commerciale
 IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[Locations]') AND type in (N'U'))
 BEGIN
     CREATE TABLE Locations (
         LocationId INT PRIMARY KEY IDENTITY(1,1),
         Name NVARCHAR(100) NOT NULL UNIQUE,
         Type NVARCHAR(20) NOT NULL CHECK (Type IN ('Agence', 'Antenne')),
-        ParentAgencyId INT NULL, -- Clé étrangère vers cette même table pour la hiérarchie
+        ParentAgencyId INT NULL,
         CreatedAt DATETIME DEFAULT GETDATE(),
         CONSTRAINT FK_Location_Parent FOREIGN KEY (ParentAgencyId) REFERENCES Locations(LocationId)
     );
@@ -34,9 +33,9 @@ BEGIN
     CREATE TABLE Meters (
         Id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
         SerialNumber NVARCHAR(50) NOT NULL UNIQUE,
-        Diameter NVARCHAR(50) NOT NULL, -- Ex: '15/21 (DN15)'
-        MeterType NVARCHAR(50) NOT NULL, -- Ex: 'Volumétrique', 'Vitesse'
-        Status NVARCHAR(20) NOT NULL CHECK (Status IN ('Neuf', 'Installé', 'À l''arrêt', 'Vendu')),
+        Diameter NVARCHAR(50) NOT NULL,
+        MeterType NVARCHAR(50) NOT NULL,
+        Status NVARCHAR(20) NOT NULL CHECK (Status IN ('Neuf', 'InstallÃ©', 'Ã  l''arrÃªt', 'Vendu')),
         CurrentLocationId INT NULL,
         LastUpdate DATETIME DEFAULT GETDATE(),
         CONSTRAINT FK_Meters_Location FOREIGN KEY (CurrentLocationId) REFERENCES Locations(LocationId)
@@ -44,28 +43,28 @@ BEGIN
 END
 GO
 
--- 4. Table des Mouvements de Stock (Historique)
+-- 4. Table des Mouvements de Stock
 IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[Movements]') AND type in (N'U'))
 BEGIN
     CREATE TABLE Movements (
         MovementId UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
         MeterId UNIQUEIDENTIFIER NULL,
         Date DATETIME NOT NULL DEFAULT GETDATE(),
-        Type NVARCHAR(50) NOT NULL, -- 'Transfert', 'Pose', 'Vente', etc.
-        SourceLocation NVARCHAR(100), -- Nom de la loc ou 'Fournisseur' / 'Client'
-        DestinationLocation NVARCHAR(100), -- Nom de la loc ou 'Client' / 'Client Tiers'
-        SerialNumber NVARCHAR(50), -- Capture du S/N au moment du mouvement
+        Type NVARCHAR(50) NOT NULL,
+        SourceLocation NVARCHAR(100),
+        DestinationLocation NVARCHAR(100),
+        SerialNumber NVARCHAR(50),
         Diameter NVARCHAR(50),
         Details NVARCHAR(MAX),
         
-        -- Informations Client (pour Pose/Remplacement/Vente)
+        -- Informations Client
         ClientCode NVARCHAR(20),
         ClientName NVARCHAR(100),
         ClientAddress NVARCHAR(MAX),
-        ClientFileNumber NVARCHAR(50), -- N° Dossier client
+        ClientFileNumber NVARCHAR(50),
         RealizationDate DATETIME,
         
-        -- Informations Commande (pour Réception)
+        -- Informations Commande
         OrderNumber NVARCHAR(50),
         OrderDate DATETIME,
         OrderIssuer NVARCHAR(100),
@@ -88,32 +87,5 @@ BEGIN
 END
 GO
 
--- ==========================================================
--- DONNÉES INITIALES (EXEMPLES)
--- ==========================================================
-
--- Insertion de l'agence principale
-IF NOT EXISTS (SELECT 1 FROM Locations WHERE Name = 'Agence Commerciale')
-BEGIN
-    INSERT INTO Locations (Name, Type, ParentAgencyId) 
-    VALUES ('Agence Commerciale', 'Agence', NULL);
-    
-    DECLARE @AgencyId INT = SCOPE_IDENTITY();
-
-    -- Insertion des antennes rattachées
-    INSERT INTO Locations (Name, Type, ParentAgencyId) VALUES ('Antenne Nord', 'Antenne', @AgencyId);
-    INSERT INTO Locations (Name, Type, ParentAgencyId) VALUES ('Antenne Sud', 'Antenne', @AgencyId);
-    INSERT INTO Locations (Name, Type, ParentAgencyId) VALUES ('Antenne Est', 'Antenne', @AgencyId);
-    INSERT INTO Locations (Name, Type, ParentAgencyId) VALUES ('Antenne Ouest', 'Antenne', @AgencyId);
-END
-
--- Insertion des seuils par défaut
-IF NOT EXISTS (SELECT 1 FROM Thresholds)
-BEGIN
-    INSERT INTO Thresholds (Diameter, MeterType, MinQuantity) VALUES ('15/21 (DN15)', 'Volumétrique', 10);
-    INSERT INTO Thresholds (Diameter, MeterType, MinQuantity) VALUES ('20/27 (DN20)', 'Vitesse', 5);
-END
-GO
-
-PRINT 'Base de données H2OStockDB et tables créées avec succès.';
+PRINT 'âœ… Base de donnÃ©es H2OStockDB crÃ©Ã©e avec succÃ¨s (structure vide).';
 GO

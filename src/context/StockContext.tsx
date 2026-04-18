@@ -4,6 +4,7 @@ import { Meter, Movement, StockState, MeterStatus, MovementType, MeterType, Thre
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
 
 interface StockContextType extends StockState {
+  isLoading: boolean;
   addMeter: (meter: Meter) => void;
   transferMeters: (ids: string[], from: string, to: string, date?: string) => void;
   recordPose: (id: string, location: string, clientInfo?: Movement['clientInfo'], diameter?: string, type?: MeterType) => void;
@@ -246,6 +247,16 @@ export const StockProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           diameter: meter?.diameter,
         };
       });
+
+      // Persist transfer movements to database
+      newMovements.forEach(mov => {
+        fetch(`${API_URL}/movements`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(mov),
+        }).catch(err => console.error('Failed to save transfer movement:', err));
+      });
+
       return {
         ...prev,
         meters: newMeters,
@@ -410,7 +421,18 @@ export const StockProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }).filter(alert => alert.current < alert.min);
   }, [state.meters, state.thresholds]);
 
-  const updateThreshold = (diameter: string, type: MeterType, minQuantity: number) => {
+  const updateThreshold = async (diameter: string, type: MeterType, minQuantity: number) => {
+    // Persist to database
+    try {
+      await fetch(`${API_URL}/thresholds`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ diameter, type, minQuantity }),
+      });
+    } catch (error) {
+      console.error('Failed to save threshold to database:', error);
+    }
+
     setState(prev => {
       const existingThresholds = prev.thresholds || [];
       const index = existingThresholds.findIndex(t => t.diameter === diameter && t.type === type);
@@ -492,6 +514,7 @@ export const StockProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const value = useMemo(() => ({
     ...state,
+    isLoading,
     addMeter,
     transferMeters,
     recordPose,
@@ -504,7 +527,7 @@ export const StockProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     addLocation,
     editLocation,
     lowStockAlerts,
-  }), [state, lowStockAlerts]);
+  }), [state, isLoading, lowStockAlerts]);
 
   return <StockContext.Provider value={value}>{children}</StockContext.Provider>;
 };

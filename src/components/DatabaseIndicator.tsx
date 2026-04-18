@@ -30,7 +30,7 @@ const DatabaseIndicator: React.FC = () => {
       setStatus({
         connected: false,
         name: 'H2OStockDB',
-        server: process.env.DB_SERVER || 'localhost'
+        server: 'localhost'
       });
     } finally {
       setLoading(false);

@@ -4,6 +4,7 @@ import { Search, Filter, Tag, MapPin, Activity, Edit2, X, Check, AlertCircle, Ch
 import { cn } from '../lib/utils';
 import { AVAILABLE_DIAMETERS } from '../constants';
 import { MeterStatus, MeterDiameter, Meter, MeterType } from '../types';
+import Swal from 'sweetalert2';
 
 const Inventory: React.FC = () => {
   const { meters, locations, updateMeter } = useStock();
@@ -63,16 +64,44 @@ const Inventory: React.FC = () => {
     setEditType(meter.type);
   };
 
-  const handleSaveEdit = () => {
+  const handleSaveEdit = async () => {
     if (editingMeter) {
       // Check for uniqueness
       if (editSN && editSN !== editingMeter.serialNumber) {
         const alreadyExists = meters.some(m => m.serialNumber === editSN && m.id !== editingMeter.id);
         if (alreadyExists) {
-          alert(`Erreur: Le numéro de série ${editSN} est déjà utilisé par un autre compteur.`);
+          Swal.fire({
+            icon: 'error',
+            title: 'Numéro de série déjà utilisé',
+            text: `Le numéro de série ${editSN} est déjà attribué à un autre compteur.`,
+            confirmButtonText: 'OK',
+            confirmButtonColor: '#dc2626',
+          });
           return;
         }
       }
+
+      const result = await Swal.fire({
+        icon: 'question',
+        title: 'Confirmer la modification',
+        html: `
+          <div style="text-align:left;padding:8px">
+            <div style="background:#f0f8ff;border-radius:12px;padding:14px;margin-top:8px;font-size:13px;color:#222b38">
+              <div style="margin-bottom:8px"><strong style="color:#0872c0">🏷️ S/N :</strong> ${editSN || '(inchangé)'}</div>
+              <div style="margin-bottom:8px"><strong style="color:#0872c0">📏 Diamètre :</strong> ${editDiameter}</div>
+              <div><strong style="color:#0872c0">🔧 Type :</strong> ${editType}</div>
+            </div>
+          </div>
+        `,
+        showCancelButton: true,
+        confirmButtonText: '✓ Enregistrer',
+        cancelButtonText: '✕ Annuler',
+        confirmButtonColor: '#108bdd',
+        cancelButtonColor: '#64748b',
+        reverseButtons: true,
+      });
+
+      if (!result.isConfirmed) return;
 
       updateMeter(editingMeter.id, {
         serialNumber: editSN,

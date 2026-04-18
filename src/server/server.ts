@@ -16,9 +16,6 @@ app.use(express.json());
 app.use('/api', routes);
 
 // Start server
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
-  console.log(`📊 API available at http://localhost:${PORT}/api`);
-});
+app.listen(PORT);
 
 export default app;

@@ -3,6 +3,7 @@ import { useStock } from '../context/StockContext';
 import { MapPin, Plus, Edit2, Check, X, AlertCircle, Building2, Radio } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { LocationType } from '../types';
+import Swal from 'sweetalert2';
 
 const Settings: React.FC = () => {
   const { locations, addLocation, editLocation } = useStock();
@@ -41,6 +42,42 @@ const Settings: React.FC = () => {
       return;
     }
 
+    // SweetAlert2 - Demande de confirmation avant ajout
+    const confirmResult = await Swal.fire({
+      icon: 'question',
+      title: 'Confirmer l\'ajout',
+      html: `
+        <div style="text-align: left; padding: 10px;">
+          <p style="margin-bottom: 15px; color: #374151; font-size: 14px;">
+            Voulez-vous vraiment ajouter cette localisation ?
+          </p>
+          <div style="background-color: #f0f9ff; padding: 15px; border-radius: 8px;">
+            <p style="color: #6b7280; font-size: 13px; margin: 8px 0;">
+              <strong style="color: #0891b2;">📍 Nom:</strong> ${newLocationName.trim()}
+            </p>
+            <p style="color: #6b7280; font-size: 13px; margin: 8px 0;">
+              <strong style="color: #0891b2;">🏷️ Type:</strong> ${newLocationType}
+            </p>
+            ${newLocationType === 'Antenne' && newParentAgency ? `
+            <p style="color: #6b7280; font-size: 13px; margin: 8px 0;">
+              <strong style="color: #0891b2;">🏢 Agence de rattachement:</strong> ${newParentAgency}
+            </p>
+            ` : ''}
+          </div>
+        </div>
+      `,
+      showCancelButton: true,
+      confirmButtonText: '✓ Oui, ajouter',
+      cancelButtonText: '✕ Annuler',
+      confirmButtonColor: '#0891b2',
+      cancelButtonColor: '#6b7280',
+      reverseButtons: true,
+    });
+
+    if (!confirmResult.isConfirmed) {
+      return;
+    }
+
     try {
       await addLocation({
         name: newLocationName.trim(),
@@ -48,16 +85,36 @@ const Settings: React.FC = () => {
         parentAgency: newLocationType === 'Antenne' ? newParentAgency : undefined
       });
 
-      setSuccess(`Localisation "${newLocationName.trim()}" ajoutée avec succès.`);
-      setTimeout(() => setSuccess(null), 3000);
+      // SweetAlert2 - Message de succès professionnel
+      Swal.fire({
+        icon: 'success',
+        title: 'Opération Réussie',
+        html: `
+          <div style="text-align: center; padding: 10px;">
+            <p style="color: #374151; font-size: 14px;">
+              La localisation <strong style="color: #0891b2;">"${newLocationName.trim()}"</strong> a été ajoutée avec succès.
+            </p>
+          </div>
+        `,
+        confirmButtonText: 'Parfait',
+        confirmButtonColor: '#0891b2',
+        timer: 3000,
+        timerProgressBar: true,
+      });
       
       setNewLocationName('');
       setNewLocationType('Agence');
       setNewParentAgency('');
       setShowAddForm(false);
     } catch (error) {
-      setError('Erreur lors de l\'ajout de la localisation.');
-      setTimeout(() => setError(null), 3000);
+      // SweetAlert2 - Message d'erreur professionnel
+      Swal.fire({
+        icon: 'error',
+        title: 'Erreur',
+        text: 'Une erreur est survenue lors de l\'ajout de la localisation. Veuillez réessayer.',
+        confirmButtonText: 'OK',
+        confirmButtonColor: '#dc2626'
+      });
     }
   };
 
@@ -80,6 +137,45 @@ const Settings: React.FC = () => {
       return;
     }
 
+    // SweetAlert2 - Demande de confirmation avant modification
+    const confirmResult = await Swal.fire({
+      icon: 'question',
+      title: 'Confirmer la modification',
+      html: `
+        <div style="text-align: left; padding: 10px;">
+          <p style="margin-bottom: 15px; color: #374151; font-size: 14px;">
+            Voulez-vous vraiment modifier cette localisation ?
+          </p>
+          <div style="background-color: #fef3c7; padding: 15px; border-radius: 8px;">
+            <p style="color: #6b7280; font-size: 13px; margin: 8px 0;">
+              <strong style="color: #9ca3af;">Ancien nom:</strong> <span style="text-decoration: line-through;">${oldName}</span>
+            </p>
+            <p style="color: #6b7280; font-size: 13px; margin: 8px 0;">
+              <strong style="color: #0891b2;">Nouveau nom:</strong> ${editName.trim()}
+            </p>
+            <p style="color: #6b7280; font-size: 13px; margin: 8px 0;">
+              <strong style="color: #0891b2;">Type:</strong> ${editType}
+            </p>
+            ${editType === 'Antenne' && editParentAgency ? `
+            <p style="color: #6b7280; font-size: 13px; margin: 8px 0;">
+              <strong style="color: #0891b2;">Agence de rattachement:</strong> ${editParentAgency}
+            </p>
+            ` : ''}
+          </div>
+        </div>
+      `,
+      showCancelButton: true,
+      confirmButtonText: '✓ Oui, modifier',
+      cancelButtonText: '✕ Annuler',
+      confirmButtonColor: '#0891b2',
+      cancelButtonColor: '#6b7280',
+      reverseButtons: true,
+    });
+
+    if (!confirmResult.isConfirmed) {
+      return;
+    }
+
     try {
       await editLocation(oldName, {
         name: editName.trim(),
@@ -87,13 +183,33 @@ const Settings: React.FC = () => {
         parentAgency: editType === 'Antenne' ? editParentAgency : undefined
       });
 
-      setSuccess(`Localisation "${editName.trim()}" modifiée avec succès.`);
-      setTimeout(() => setSuccess(null), 3000);
+      // SweetAlert2 - Message de succès professionnel pour modification
+      Swal.fire({
+        icon: 'success',
+        title: 'Opération Réussie',
+        html: `
+          <div style="text-align: center; padding: 10px;">
+            <p style="color: #374151; font-size: 14px;">
+              La localisation a été modifiée avec succès.
+            </p>
+          </div>
+        `,
+        confirmButtonText: 'Parfait',
+        confirmButtonColor: '#0891b2',
+        timer: 3000,
+        timerProgressBar: true,
+      });
       
       setEditingLocation(null);
     } catch (error) {
-      setError('Erreur lors de la modification de la localisation.');
-      setTimeout(() => setError(null), 3000);
+      // SweetAlert2 - Message d'erreur professionnel
+      Swal.fire({
+        icon: 'error',
+        title: 'Erreur',
+        text: 'Une erreur est survenue lors de la modification de la localisation. Veuillez réessayer.',
+        confirmButtonText: 'OK',
+        confirmButtonColor: '#dc2626'
+      });
     }
   };
 

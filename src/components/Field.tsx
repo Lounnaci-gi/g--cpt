@@ -5,6 +5,7 @@ import { MeterType } from '../types';
 import { AVAILABLE_DIAMETERS } from '../constants';
 import { HardHat, Search, CheckCircle2, RefreshCw, ShoppingCart, AlertCircle } from 'lucide-react';
 import { cn } from '../lib/utils';
+import Swal from 'sweetalert2';
 
 const Field: React.FC = () => {
   const { meters, locations, recordPose, recordReplacement, recordSale, updateMeter } = useStock();
@@ -25,7 +26,7 @@ const Field: React.FC = () => {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleAction = () => {
+  const handleAction = async () => {
     setError(null);
     const clientInfo = {
       code: clientCode,
@@ -35,47 +36,76 @@ const Field: React.FC = () => {
       fileNumber: clientFileNumber
     };
 
+    // Vérifications préalables
     if (activeSubTab === 'pose' && meterSN && selectedLocation) {
       const meter = meters.find(m => m.serialNumber === meterSN);
       if (meter && (meter.status === 'Installé' || meter.status === 'Vendu')) {
-        setError(`Erreur: Le compteur ${meterSN} est déjà ${meter.status.toLowerCase()}.`);
-        setTimeout(() => setError(null), 5000);
+        Swal.fire({ icon: 'error', title: 'Compteur indisponible', text: `Le compteur ${meterSN} est déjà ${meter.status.toLowerCase()}.`, confirmButtonText: 'OK', confirmButtonColor: '#dc2626' });
         return;
-      }
-      const id = meter?.id || Math.random().toString(36).substr(2, 9);
-      recordPose(id, selectedLocation, clientInfo, meterDiameter, meterType);
-      if (!meter) {
-        updateMeter(id, { serialNumber: meterSN });
       }
     } else if (activeSubTab === 'replacement' && meterSN && selectedLocation) {
       const newMeter = meters.find(m => m.serialNumber === meterSN);
       if (newMeter && (newMeter.status === 'Installé' || newMeter.status === 'Vendu')) {
-        setError(`Erreur: Le nouveau compteur ${meterSN} est déjà ${newMeter.status.toLowerCase()}.`);
-        setTimeout(() => setError(null), 5000);
+        Swal.fire({ icon: 'error', title: 'Compteur indisponible', text: `Le nouveau compteur ${meterSN} est déjà ${newMeter.status.toLowerCase()}.`, confirmButtonText: 'OK', confirmButtonColor: '#dc2626' });
         return;
       }
+    } else if (activeSubTab === 'sale' && meterSN && selectedLocation) {
+      const meter = meters.find(m => m.serialNumber === meterSN);
+      if (meter && (meter.status === 'Installé' || meter.status === 'Vendu')) {
+        Swal.fire({ icon: 'error', title: 'Compteur indisponible', text: `Le compteur ${meterSN} est déjà ${meter.status.toLowerCase()}.`, confirmButtonText: 'OK', confirmButtonColor: '#dc2626' });
+        return;
+      }
+    }
+
+    const operationLabel = activeSubTab === 'pose' ? 'Nouvelle Pose' : activeSubTab === 'replacement' ? 'Remplacement' : 'Vente Directe';
+    const operationIcon = activeSubTab === 'pose' ? '🛠️' : activeSubTab === 'replacement' ? '🔄' : '🛏️';
+
+    const result = await Swal.fire({
+      icon: 'question',
+      title: `Confirmer : ${operationLabel}`,
+      html: `
+        <div style="text-align:left;padding:8px">
+          <div style="background:#f0f8ff;border-radius:12px;padding:14px;margin-top:8px;font-size:13px;color:#222b38">
+            <div style="margin-bottom:8px"><strong style="color:#0872c0">${operationIcon} Opération :</strong> ${operationLabel}</div>
+            <div style="margin-bottom:8px"><strong style="color:#0872c0">🏷️ S/N Nouveau :</strong> ${meterSN}</div>
+            ${activeSubTab === 'replacement' && oldMeterSN ? `<div style="margin-bottom:8px"><strong style="color:#0872c0">📤 S/N Ancien :</strong> ${oldMeterSN}</div>` : ''}
+            <div style="margin-bottom:8px"><strong style="color:#0872c0">📍 Lieu :</strong> ${selectedLocation}</div>
+            ${clientCode ? `<div><strong style="color:#0872c0">👤 Client :</strong> ${clientCode}${clientName ? ` — ${clientName}` : ''}</div>` : ''}
+          </div>
+        </div>
+      `,
+      showCancelButton: true,
+      confirmButtonText: `✓ Valider l'opération`,
+      cancelButtonText: '✕ Annuler',
+      confirmButtonColor: '#108bdd',
+      cancelButtonColor: '#64748b',
+      reverseButtons: true,
+    });
+
+    if (!result.isConfirmed) return;
+
+    // Exécution
+    if (activeSubTab === 'pose' && meterSN && selectedLocation) {
+      const meter = meters.find(m => m.serialNumber === meterSN);
+      const id = meter?.id || Math.random().toString(36).substr(2, 9);
+      recordPose(id, selectedLocation, clientInfo, meterDiameter, meterType);
+      if (!meter) updateMeter(id, { serialNumber: meterSN });
+    } else if (activeSubTab === 'replacement' && meterSN && selectedLocation) {
+      const newMeter = meters.find(m => m.serialNumber === meterSN);
       const oldMeter = oldMeterSN ? meters.find(m => m.serialNumber === oldMeterSN) : null;
       const newId = newMeter?.id || Math.random().toString(36).substr(2, 9);
       const oldId = oldMeter?.id || (oldMeterSN ? Math.random().toString(36).substr(2, 9) : null);
-      
       recordReplacement(newId, oldId, selectedLocation, clientInfo, meterDiameter, meterType, oldMeterSN);
-      
       if (!newMeter) updateMeter(newId, { serialNumber: meterSN });
       if (oldId && !oldMeter) updateMeter(oldId, { serialNumber: oldMeterSN });
     } else if (activeSubTab === 'sale' && meterSN && selectedLocation) {
       const meter = meters.find(m => m.serialNumber === meterSN);
-      if (meter && (meter.status === 'Installé' || meter.status === 'Vendu')) {
-        setError(`Erreur: Le compteur ${meterSN} est déjà ${meter.status.toLowerCase()}.`);
-        setTimeout(() => setError(null), 5000);
-        return;
-      }
       const id = meter?.id || Math.random().toString(36).substr(2, 9);
       recordSale(id, selectedLocation, clientInfo, meterDiameter, meterType);
-      if (!meter) {
-        updateMeter(id, { serialNumber: meterSN });
-      }
+      if (!meter) updateMeter(id, { serialNumber: meterSN });
     }
 
+    // Reset
     setMeterSN('');
     setMeterDiameter('');
     setMeterType('Volumétrique');
@@ -84,8 +114,16 @@ const Field: React.FC = () => {
     setClientName('');
     setClientAddress('');
     setClientFileNumber('');
-    setSuccess(true);
-    setTimeout(() => setSuccess(false), 3000);
+
+    Swal.fire({
+      icon: 'success',
+      title: 'Opération enregistrée !',
+      html: `<p style="color:#64748b">La <strong>${operationLabel}</strong> du compteur <strong>${meterSN}</strong> a été enregistrée avec succès.</p>`,
+      confirmButtonText: 'Parfait',
+      confirmButtonColor: '#108bdd',
+      timer: 3000,
+      timerProgressBar: true,
+    });
   };
 
   const availableMeters = meters.filter(m => 

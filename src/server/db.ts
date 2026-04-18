@@ -26,7 +26,6 @@ let pool: sql.ConnectionPool | null = null;
 export async function getPool(): Promise<sql.ConnectionPool> {
   if (!pool) {
     pool = await sql.connect(config);
-    console.log('✅ Connected to SQL Server Database');
   }
   return pool;
 }
@@ -71,5 +70,4 @@ export async function execute(sqlQuery: string, params?: any): Promise<any> {
 
 // Test connection on startup
 getPool()
-  .then(() => console.log('✅ Database connection pool initialized'))
   .catch(err => console.error('❌ Database connection failed:', err));
