@@ -163,7 +163,17 @@ const Field: React.FC = () => {
           </select>
         </div>
 
-        {selectedLocation && (
+        {selectedLocation && availableMeters.length === 0 && (
+          <div className="text-center p-20 glass-card border-dashed border-rose-200 bg-rose-50/30 rounded-3xl animate-in fade-in zoom-in duration-300">
+            <AlertCircle className="w-12 h-12 mx-auto mb-4 text-rose-400" />
+            <p className="font-mono text-sm uppercase tracking-widest text-rose-600 font-bold">Stock Indisponible</p>
+            <p className="font-mono text-xs text-rose-500 mt-2 max-w-sm mx-auto">
+              Cette antenne ne dispose d'aucun compteur neuf en stock. Veuillez effectuer un transfert vers cette localisation avant de procéder à une opération de terrain.
+            </p>
+          </div>
+        )}
+
+        {selectedLocation && availableMeters.length > 0 && (
           <div className="space-y-6 animate-in fade-in duration-500">
             {/* Sub-Tabs */}
             <div className="flex flex-wrap gap-2 p-1 bg-water-100 rounded-2xl">

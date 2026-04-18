@@ -39,26 +39,22 @@ const Reporting: React.FC = () => {
       const stockFinal = relevantMeters.filter(m => m.status === 'Neuf' || m.status === 'À l\'arrêt').length;
 
       const entrees = periodMovements.filter(mov => 
-        mov.type === 'Transfert' && (selectedLocation === 'all' || mov.destination === selectedLocation)
+        (mov.type === 'Réception' || mov.type === 'Réintégration' || mov.type === 'Transfert') && 
+        (selectedLocation === 'all' || mov.destination === selectedLocation)
       ).length;
 
       const sorties = periodMovements.filter(mov => 
-        (mov.type === 'Pose' || mov.type === 'Vente' || mov.type === 'Remplacement') && 
+        (mov.type === 'Pose' || mov.type === 'Vente' || mov.type === 'Remplacement' || mov.type === 'Transfert') && 
         (selectedLocation === 'all' || mov.source === selectedLocation)
       ).length;
 
-      const reintegrations = periodMovements.filter(mov => 
-        mov.type === 'Réintégration' && (selectedLocation === 'all' || mov.source === selectedLocation)
-      ).length;
-
-      const stockInitial = stockFinal - entrees + sorties + reintegrations;
+      const stockInitial = stockFinal - entrees + sorties;
 
       return {
         diameter,
         stockInitial,
         entrees,
         sorties,
-        reintegrations,
         stockFinal
       };
     });
@@ -209,7 +205,6 @@ const Reporting: React.FC = () => {
                   <th className="p-4 text-center border-r border-white/10">Stock Initial</th>
                   <th className="p-4 text-center border-r border-white/10">Entrées</th>
                   <th className="p-4 text-center border-r border-white/10">Sorties</th>
-                  <th className="p-4 text-center border-r border-white/10">Réintégrations</th>
                   <th className="p-4 text-center">Stock Final</th>
                 </tr>
               </thead>
@@ -218,9 +213,8 @@ const Reporting: React.FC = () => {
                   <tr key={row.diameter} className={cn("border-b border-water-100 hover:bg-water-50/50 transition-colors", idx % 2 === 0 ? "bg-white/30" : "bg-transparent")}>
                     <td className="p-4 font-bold border-r border-water-100 text-water-900">{row.diameter}</td>
                     <td className="p-4 text-center border-r border-water-100 text-water-700">{row.stockInitial}</td>
-                    <td className="p-4 text-center border-r border-water-100 text-cyan-600">+{row.entrees}</td>
+                    <td className="p-4 text-center border-r border-water-100 text-purple-600">+{row.entrees}</td>
                     <td className="p-4 text-center border-r border-water-100 text-blue-600">-{row.sorties}</td>
-                    <td className="p-4 text-center border-r border-water-100 text-teal-600">-{row.reintegrations}</td>
                     <td className="p-4 text-center font-bold bg-water-500/5 text-water-900">{row.stockFinal}</td>
                   </tr>
                 ))}
@@ -229,7 +223,6 @@ const Reporting: React.FC = () => {
                   <td className="p-4 text-center border-r border-white/10">{reportData.reduce((acc, r) => acc + r.stockInitial, 0)}</td>
                   <td className="p-4 text-center border-r border-white/10">{reportData.reduce((acc, r) => acc + r.entrees, 0)}</td>
                   <td className="p-4 text-center border-r border-white/10">{reportData.reduce((acc, r) => acc + r.sorties, 0)}</td>
-                  <td className="p-4 text-center border-r border-white/10">{reportData.reduce((acc, r) => acc + r.reintegrations, 0)}</td>
                   <td className="p-4 text-center">{reportData.reduce((acc, r) => acc + r.stockFinal, 0)}</td>
                 </tr>
               </tbody>
@@ -380,8 +373,10 @@ const Reporting: React.FC = () => {
         <div className="space-y-2">
           <h4 className="font-serif italic font-bold text-cyan-900 text-lg">Note sur le calcul</h4>
           <p className="text-sm text-cyan-800 leading-relaxed opacity-80">
-            Le stock initial est calculé rétrospectivement à partir du stock actuel et des mouvements enregistrés durant la période sélectionnée. 
-            Les réintégrations sont considérées comme des sorties de l'antenne vers l'agence.
+            Le tableau synthétise les mouvements complets de stock sur la période sélectionnée :<br/>
+            • <strong>Entrées</strong> : Réceptions fournisseurs, transferts entrants et réintégrations.<br/>
+            • <strong>Sorties</strong> : Poses, ventes, remplacements et transferts sortants.<br/>
+            • <strong>Stock Initial</strong> = Stock Final - Entrées + Sorties.
           </p>
         </div>
       </div>
