@@ -43,10 +43,23 @@ const Reporting: React.FC = () => {
         (selectedLocation === 'all' || mov.destination === selectedLocation)
       ).length;
 
-      const sorties = periodMovements.filter(mov => 
-        (mov.type === 'Pose' || mov.type === 'Vente' || mov.type === 'Remplacement' || mov.type === 'Transfert') && 
-        (selectedLocation === 'all' || mov.source === selectedLocation)
+      const poses = periodMovements.filter(mov => 
+        mov.type === 'Pose' && (selectedLocation === 'all' || mov.source === selectedLocation)
       ).length;
+
+      const ventes = periodMovements.filter(mov => 
+        mov.type === 'Vente' && (selectedLocation === 'all' || mov.source === selectedLocation)
+      ).length;
+
+      const remplacements = periodMovements.filter(mov => 
+        mov.type === 'Remplacement' && (selectedLocation === 'all' || mov.source === selectedLocation)
+      ).length;
+
+      const transfertsSortants = periodMovements.filter(mov => 
+        mov.type === 'Transfert' && (selectedLocation === 'all' || mov.source === selectedLocation)
+      ).length;
+
+      const sorties = poses + ventes + remplacements + transfertsSortants;
 
       const stockInitial = stockFinal - entrees + sorties;
 
@@ -54,6 +67,10 @@ const Reporting: React.FC = () => {
         diameter,
         stockInitial,
         entrees,
+        poses,
+        ventes,
+        remplacements,
+        transfertsSortants,
         sorties,
         stockFinal
       };
@@ -200,12 +217,19 @@ const Reporting: React.FC = () => {
           <div className="overflow-x-auto">
             <table className="w-full border-collapse">
               <thead>
-                <tr className="bg-water-600 text-white font-mono text-[10px] uppercase tracking-widest">
-                  <th className="p-4 text-left border-r border-white/10">Diamètre</th>
-                  <th className="p-4 text-center border-r border-white/10">Stock Initial</th>
-                  <th className="p-4 text-center border-r border-white/10">Entrées</th>
-                  <th className="p-4 text-center border-r border-white/10">Sorties</th>
-                  <th className="p-4 text-center">Stock Final</th>
+                <tr className="bg-water-600 text-white font-mono text-[10px] uppercase tracking-widest text-center">
+                  <th className="p-4 text-left border-r border-white/10" rowSpan={2}>Diamètre</th>
+                  <th className="p-4 border-r border-white/10" rowSpan={2}>Stock Initial</th>
+                  <th className="p-4 border-r border-white/10" rowSpan={2}>Entrées</th>
+                  <th className="p-2 border-r border-white/10 border-b border-white/10" colSpan={5}>Sorties</th>
+                  <th className="p-4" rowSpan={2}>Stock Final</th>
+                </tr>
+                <tr className="bg-water-500 text-white font-mono text-[9px] uppercase tracking-widest text-center">
+                  <th className="p-2 border-r border-white/10">Poses</th>
+                  <th className="p-2 border-r border-white/10">Ventes</th>
+                  <th className="p-2 border-r border-white/10">Rempls.</th>
+                  <th className="p-2 border-r border-white/10">Transf.</th>
+                  <th className="p-2 border-r border-white/10">Total</th>
                 </tr>
               </thead>
               <tbody className="font-mono text-sm">
@@ -213,8 +237,12 @@ const Reporting: React.FC = () => {
                   <tr key={row.diameter} className={cn("border-b border-water-100 hover:bg-water-50/50 transition-colors", idx % 2 === 0 ? "bg-white/30" : "bg-transparent")}>
                     <td className="p-4 font-bold border-r border-water-100 text-water-900">{row.diameter}</td>
                     <td className="p-4 text-center border-r border-water-100 text-water-700">{row.stockInitial}</td>
-                    <td className="p-4 text-center border-r border-water-100 text-purple-600">+{row.entrees}</td>
-                    <td className="p-4 text-center border-r border-water-100 text-blue-600">-{row.sorties}</td>
+                    <td className="p-4 text-center border-r border-water-100 text-purple-600 font-bold">+{row.entrees}</td>
+                    <td className="p-4 text-center border-r border-water-100 text-indigo-500 opacity-80">{row.poses > 0 ? `-${row.poses}` : '-'}</td>
+                    <td className="p-4 text-center border-r border-water-100 text-emerald-500 opacity-80">{row.ventes > 0 ? `-${row.ventes}` : '-'}</td>
+                    <td className="p-4 text-center border-r border-water-100 text-sky-500 opacity-80">{row.remplacements > 0 ? `-${row.remplacements}` : '-'}</td>
+                    <td className="p-4 text-center border-r border-water-100 text-water-400 opacity-80">{row.transfertsSortants > 0 ? `-${row.transfertsSortants}` : '-'}</td>
+                    <td className="p-4 text-center border-r border-water-100 text-blue-600 font-bold">-{row.sorties}</td>
                     <td className="p-4 text-center font-bold bg-water-500/5 text-water-900">{row.stockFinal}</td>
                   </tr>
                 ))}
@@ -222,6 +250,10 @@ const Reporting: React.FC = () => {
                   <td className="p-4 border-r border-white/10">TOTAL</td>
                   <td className="p-4 text-center border-r border-white/10">{reportData.reduce((acc, r) => acc + r.stockInitial, 0)}</td>
                   <td className="p-4 text-center border-r border-white/10">{reportData.reduce((acc, r) => acc + r.entrees, 0)}</td>
+                  <td className="p-4 text-center border-r border-white/10">{reportData.reduce((acc, r) => acc + r.poses, 0)}</td>
+                  <td className="p-4 text-center border-r border-white/10">{reportData.reduce((acc, r) => acc + r.ventes, 0)}</td>
+                  <td className="p-4 text-center border-r border-white/10">{reportData.reduce((acc, r) => acc + r.remplacements, 0)}</td>
+                  <td className="p-4 text-center border-r border-white/10">{reportData.reduce((acc, r) => acc + r.transfertsSortants, 0)}</td>
                   <td className="p-4 text-center border-r border-white/10">{reportData.reduce((acc, r) => acc + r.sorties, 0)}</td>
                   <td className="p-4 text-center">{reportData.reduce((acc, r) => acc + r.stockFinal, 0)}</td>
                 </tr>
@@ -261,7 +293,14 @@ const Reporting: React.FC = () => {
                           {m.type}
                         </span>
                       </td>
-                      <td className="p-4 font-bold border-r border-water-100 text-water-900">{m.serialNumber}</td>
+                      <td className="p-4 border-r border-water-100">
+                        <div className="font-bold text-water-900">{m.serialNumber}</div>
+                        {(m.brand || m.model) && (
+                          <div className="text-[10px] text-water-400 uppercase">
+                            {m.brand} {m.model}
+                          </div>
+                        )}
+                      </td>
                       <td className="p-4 border-r border-water-100">
                         {m.clientInfo ? (
                           <div className="space-y-1">

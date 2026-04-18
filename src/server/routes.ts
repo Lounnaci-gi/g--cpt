@@ -1,5 +1,6 @@
 import express from 'express';
 import { query, execute, getPool } from './db.js';
+import sql from 'mssql';
 
 const router = express.Router();
 
@@ -277,6 +278,9 @@ router.get('/meters', async (req, res) => {
         m.SerialNumber as serialNumber, 
         m.Diameter as diameter,
         m.MeterType as type, 
+        m.Brand as brand,
+        m.Model as model,
+        m.ManufacturingYear as year,
         m.Status as status,
         l.Name as location, 
         m.LastUpdate as lastUpdate
@@ -318,7 +322,7 @@ router.get('/meters', async (req, res) => {
 // POST /api/meters - Créer un nouveau compteur
 router.post('/meters', async (req, res) => {
   try {
-    const { serialNumber, diameter, type, status, location } = req.body;
+    const { serialNumber, diameter, type, brand, model, year, status, location } = req.body;
     
 
     // Validation
@@ -347,8 +351,18 @@ router.post('/meters', async (req, res) => {
     }
 
     await execute(
-      `INSERT INTO Meters (SerialNumber, Diameter, MeterType, Status, CurrentLocationId) VALUES (@serialNumber, @diameter, @type, @status, @locationId)`,
-      { serialNumber, diameter, type, status, locationId }
+      `INSERT INTO Meters (SerialNumber, Diameter, MeterType, Brand, Model, ManufacturingYear, Status, CurrentLocationId) 
+       VALUES (@serialNumber, @diameter, @type, @brand, @model, @year, @status, @locationId)`,
+      { 
+        serialNumber, 
+        diameter, 
+        type, 
+        brand: brand || 'Itron', 
+        model: model || 'Volumétrique', 
+        year: year || new Date().getFullYear(),
+        status, 
+        locationId 
+      }
     );
 
     res.status(201).json({ 
@@ -366,6 +380,83 @@ router.post('/meters', async (req, res) => {
     }
     res.status(500).json({ 
       error: 'Failed to create meter',
+      details: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+// POST /api/meters/bulk - Création groupée HAUTE PERFORMANCE (Streaming)
+router.post('/meters/bulk', async (req, res) => {
+  const { meters } = req.body;
+  
+  if (!Array.isArray(meters) || meters.length === 0) {
+    return res.status(400).json({ error: 'Meters array is required' });
+  }
+
+  try {
+    const pool = await getPool();
+    
+    // 1. Mise en cache des IDs de localisation pour éviter les requêtes redondantes
+    const locationNames = [...new Set(meters.map(m => m.location))].filter(Boolean);
+    const locationMap: Record<string, number> = {};
+    
+    for (const name of locationNames) {
+      const result = await pool.request()
+        .input('name', name)
+        .query('SELECT LocationId FROM Locations WHERE Name = @name');
+      if (result.recordset[0]) {
+        locationMap[name] = result.recordset[0].LocationId;
+      }
+    }
+
+    // 2. Préparation du tableau Bulk (Native SQL Server Bulk)
+    const table = new sql.Table('Meters');
+    table.create = false; // La table existe déjà
+    
+    // Ajout des colonnes avec types SQL précis - L'ORDRE DOIT CORRESPONDRE À LA BDD
+    table.columns.add('Id', sql.UniqueIdentifier, { nullable: false });
+    table.columns.add('SerialNumber', sql.NVarChar(50), { nullable: false });
+    table.columns.add('Diameter', sql.NVarChar(50), { nullable: false });
+    table.columns.add('MeterType', sql.NVarChar(50), { nullable: false });
+    table.columns.add('Brand', sql.NVarChar(50), { nullable: true });
+    table.columns.add('Model', sql.NVarChar(50), { nullable: true });
+    table.columns.add('ManufacturingYear', sql.Int, { nullable: true });
+    table.columns.add('Status', sql.NVarChar(20), { nullable: false });
+    table.columns.add('CurrentLocationId', sql.Int, { nullable: true });
+    table.columns.add('LastUpdate', sql.DateTime, { nullable: true });
+
+    // Ajout des lignes
+    for (const m of meters) {
+      table.rows.add(
+        require('crypto').randomUUID(),
+        m.serialNumber,
+        m.diameter,
+        m.type,
+        m.brand || 'Itron',
+        m.model || 'Aquadis+',
+        m.year || new Date().getFullYear(),
+        m.status || 'Neuf',
+        locationMap[m.location] || null,
+        m.lastUpdate ? new Date(m.lastUpdate) : new Date()
+      );
+    }
+
+    // 3. Exécution de l'insertion en masse (très rapide)
+    await pool.request().bulk(table);
+    
+    res.status(201).json({ success: true, count: meters.length });
+  } catch (error: any) {
+    console.error('❌ Error in NATIVE bulk meter creation:', error);
+    
+    if (error.message?.includes('UNIQUE') || error.number === 2627) {
+      return res.status(400).json({ 
+        error: 'Duplicate serial number in batch',
+        details: 'Un ou plusieurs numéros de série existent déjà dans la base de données.'
+      });
+    }
+
+    res.status(500).json({ 
+      error: 'Failed to create meters in bulk mode', 
       details: error instanceof Error ? error.message : String(error)
     });
   }
@@ -390,6 +481,18 @@ router.put('/meters/:id', async (req, res) => {
     if (updates.type !== undefined) {
       fields.push('MeterType = @type');
       params.type = updates.type;
+    }
+    if (updates.brand !== undefined) {
+      fields.push('Brand = @brand');
+      params.brand = updates.brand;
+    }
+    if (updates.model !== undefined) {
+      fields.push('Model = @model');
+      params.model = updates.model;
+    }
+    if (updates.year !== undefined) {
+      fields.push('ManufacturingYear = @year');
+      params.year = updates.year;
     }
     if (updates.status !== undefined) {
       fields.push('Status = @status');
@@ -431,6 +534,8 @@ router.get('/movements', async (req, res) => {
         mv.DestinationLocation as destination,
         mv.SerialNumber as serialNumber, 
         mv.Diameter as diameter, 
+        mv.Brand as brand,
+        mv.Model as model,
         mv.Details as details,
         mv.ClientCode as clientCode, 
         mv.ClientName as clientName,
@@ -513,12 +618,12 @@ router.post('/movements', async (req, res) => {
     await execute(
       `INSERT INTO Movements (
         MeterId, Date, Type, SourceLocation, DestinationLocation,
-        SerialNumber, Diameter, Details,
+        SerialNumber, Diameter, Brand, Model, Details,
         ClientCode, ClientName, ClientAddress, ClientFileNumber, RealizationDate,
         OrderNumber, OrderDate, OrderIssuer
       ) VALUES (
         @meterId, @date, @type, @source, @destination,
-        @serialNumber, @diameter, @details,
+        @serialNumber, @diameter, @brand, @model, @details,
         @clientCode, @clientName, @clientAddress, @clientFileNumber, @realizationDate,
         @orderNumber, @orderDate, @orderIssuer
       )`,
@@ -530,6 +635,8 @@ router.post('/movements', async (req, res) => {
         destination: movement.destination,
         serialNumber: movement.serialNumber,
         diameter: movement.diameter || null,
+        brand: movement.brand || null,
+        model: movement.model || null,
         details: movement.details || null,
         clientCode: movement.clientInfo?.code || null,
         clientName: movement.clientInfo?.name || null,

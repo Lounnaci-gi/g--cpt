@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { Meter, Movement, StockState, MeterStatus, MovementType, MeterType, Threshold, AppLocation, LocationType } from '../types';
+import Swal from 'sweetalert2';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
 
@@ -12,7 +13,7 @@ interface StockContextType extends StockState {
   recordSale: (id: string, location: string, clientInfo?: Movement['clientInfo'], diameter?: string, type?: MeterType) => void;
   updateMeter: (id: string, updatedMeter: Partial<Meter>) => void;
   updateMovement: (id: string, updatedMovement: Partial<Movement>) => void;
-  receiveStock: (quantity: number, diameter: string, type: MeterType, date: string, location: string, serialNumber?: string, orderInfo?: Movement['orderInfo']) => void;
+  receiveStock: (quantity: number, diameter: string, type: MeterType, date: string, location: string, brand: string, model: string, year: number, serialNumber?: string, orderInfo?: Movement['orderInfo']) => void;
   updateThreshold: (diameter: string, type: MeterType, minQuantity: number) => void;
   addLocation: (location: AppLocation) => void;
   editLocation: (oldName: string, updatedLocation: AppLocation) => void;
@@ -109,9 +110,9 @@ export const StockProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     localStorage.setItem('water_meter_stock', JSON.stringify(state));
   }, [state]);
 
-  const addMovement = async (type: MovementType, source: string, destination: string, serialNumber: string, details?: string, clientInfo?: Movement['clientInfo'], orderInfo?: Movement['orderInfo'], meterId?: string, diameter?: string, date?: string) => {
+  const addMovement = async (type: MovementType, source: string, destination: string, serialNumber: string, details?: string, clientInfo?: Movement['clientInfo'], orderInfo?: Movement['orderInfo'], meterId?: string, diameter?: string, date?: string, brand?: string, model?: string) => {
     const newMovement: Movement = {
-      id: Math.random().toString(36).substr(2, 9),
+      id: crypto.randomUUID(),
       meterId,
       date: date ? new Date(date).toISOString() : new Date().toISOString(),
       type,
@@ -119,6 +120,8 @@ export const StockProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       destination,
       serialNumber,
       diameter,
+      brand,
+      model,
       details,
       clientInfo,
       orderInfo,
@@ -140,27 +143,46 @@ export const StockProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }));
   };
 
-  const updateMeterStatus = (id: string, status: MeterStatus, location: string, diameter?: string, type?: MeterType, serialNumber?: string, date?: string) => {
+  const updateMeterStatus = async (id: string, status: MeterStatus, location: string, diameter?: string, type?: MeterType, serialNumber?: string, date?: string, brand?: string, model?: string, year?: number) => {
+    const updateDate = date ? new Date(date).toISOString() : new Date().toISOString();
+    
+    // 1. Persist to API
+    try {
+      const payload: Partial<Meter> = { 
+        status, 
+        location, 
+        lastUpdate: updateDate 
+      };
+      
+      if (diameter) payload.diameter = diameter;
+      if (type) payload.type = type;
+      if (serialNumber) payload.serialNumber = serialNumber;
+      if (brand) payload.brand = brand;
+      if (model) payload.model = model;
+      if (year) payload.year = year;
+
+      await fetch(`${API_URL}/meters/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+    } catch (error) {
+      console.error('❌ Failed to persist meter status update:', error);
+    }
+
+    // 2. Update local state
     setState(prev => {
       const exists = prev.meters.some(m => m.id === id);
-      const updateDate = date ? new Date(date).toISOString() : new Date().toISOString();
       
-      // Check for uniqueness if creating or updating SN
-      if (serialNumber) {
-        const alreadyExists = prev.meters.some(m => m.serialNumber === serialNumber && m.id !== id);
-        if (alreadyExists) {
-          console.warn(`Serial number ${serialNumber} already exists. Status update restricted.`);
-          // We can still update status, but we don't change the SN if it creates a collision
-          serialNumber = undefined; 
-        }
-      }
-
       if (!exists) {
         const newMeter: Meter = {
           id,
           serialNumber: serialNumber || '',
           diameter: diameter || 'DN15',
           type: type || 'Volumétrique',
+          brand: brand || 'Itron',
+          model: model || 'Aquadis+',
+          year: year || new Date().getFullYear(),
           status,
           location,
           lastUpdate: updateDate
@@ -175,7 +197,18 @@ export const StockProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         ...prev,
         meters: prev.meters.map(m => 
           m.id === id 
-            ? { ...m, status, location, lastUpdate: updateDate, diameter: diameter || m.diameter, type: type || m.type, serialNumber: serialNumber !== undefined ? serialNumber : m.serialNumber } 
+            ? { 
+                ...m, 
+                status, 
+                location, 
+                lastUpdate: updateDate, 
+                diameter: diameter || m.diameter, 
+                type: type || m.type, 
+                serialNumber: serialNumber !== undefined ? serialNumber : m.serialNumber,
+                brand: brand || m.brand,
+                model: model || m.model,
+                year: year || m.year
+              } 
             : m
         ),
       };
@@ -237,7 +270,7 @@ export const StockProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const newMovements = ids.map(id => {
         const meter = prev.meters.find(m => m.id === id);
         return {
-          id: Math.random().toString(36).substr(2, 9),
+          id: crypto.randomUUID(),
           meterId: id,
           date: movementDate,
           type: 'Transfert' as MovementType,
@@ -245,6 +278,8 @@ export const StockProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           destination: to,
           serialNumber: meter?.serialNumber || 'SANS S/N',
           diameter: meter?.diameter,
+          brand: meter?.brand,
+          model: meter?.model,
         };
       });
 
@@ -265,34 +300,45 @@ export const StockProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     });
   };
 
-  const recordPose = (id: string, location: string, clientInfo?: Movement['clientInfo'], diameter?: string, type?: MeterType) => {
+  const recordPose = async (id: string, location: string, clientInfo?: Movement['clientInfo'], diameter?: string, type?: MeterType) => {
     const meter = state.meters.find(m => m.id === id);
     const date = clientInfo?.realizationDate;
-    updateMeterStatus(id, 'Installé', location, diameter, type, undefined, date);
-    addMovement('Pose', location, 'Client', meter?.serialNumber || 'SANS S/N', undefined, clientInfo, undefined, id, diameter || meter?.diameter, date);
+    await updateMeterStatus(id, 'Installé', location, diameter, type, undefined, date, meter?.brand, meter?.model, meter?.year);
+    addMovement('Pose', location, 'Client', meter?.serialNumber || 'SANS S/N', undefined, clientInfo, undefined, id, diameter || meter?.diameter, date, meter?.brand, meter?.model);
   };
 
-  const recordReplacement = (newId: string, oldId: string | null, location: string, clientInfo?: Movement['clientInfo'], diameter?: string, type?: MeterType, oldMeterSN?: string) => {
+  const recordReplacement = async (newId: string, oldId: string | null, location: string, clientInfo?: Movement['clientInfo'], diameter?: string, type?: MeterType, oldMeterSN?: string) => {
     const newMeter = state.meters.find(m => m.id === newId);
     const oldMeter = oldId ? state.meters.find(m => m.id === oldId) : null;
     const date = clientInfo?.realizationDate;
-    updateMeterStatus(newId, 'Installé', location, diameter, type, undefined, date);
-    addMovement('Remplacement', location, 'Client', newMeter?.serialNumber || 'SANS S/N', `Remplace ${oldMeter?.serialNumber || oldMeterSN || 'INCONNU'}`, clientInfo, undefined, newId, diameter || newMeter?.diameter, date);
+    
+    await updateMeterStatus(newId, 'Installé', location, diameter, type, undefined, date, newMeter?.brand, newMeter?.model, newMeter?.year);
+    addMovement('Remplacement', location, 'Client', newMeter?.serialNumber || 'SANS S/N', `Remplace ${oldMeter?.serialNumber || oldMeterSN || 'INCONNU'}`, clientInfo, undefined, newId, diameter || newMeter?.diameter, date, newMeter?.brand, newMeter?.model);
     
     if (oldId) {
-      updateMeterStatus(oldId, 'À l\'arrêt', location, undefined, undefined, undefined, date);
-      addMovement('Remplacement', 'Client', location, oldMeter?.serialNumber || oldMeterSN || 'SANS S/N', `Remplacé par ${newMeter?.serialNumber || 'SANS S/N'}`, clientInfo, undefined, oldId, oldMeter?.diameter, date);
+      await updateMeterStatus(oldId, 'À l\'arrêt', location, undefined, undefined, undefined, date, oldMeter?.brand, oldMeter?.model, oldMeter?.year);
+      addMovement('Remplacement', 'Client', location, oldMeter?.serialNumber || oldMeterSN || 'SANS S/N', `Remplacé par ${newMeter?.serialNumber || 'SANS S/N'}`, clientInfo, undefined, oldId, oldMeter?.diameter, date, oldMeter?.brand, oldMeter?.model);
     }
   };
 
-  const recordSale = (id: string, location: string, clientInfo?: Movement['clientInfo'], diameter?: string, type?: MeterType) => {
+  const recordSale = async (id: string, location: string, clientInfo?: Movement['clientInfo'], diameter?: string, type?: MeterType) => {
     const meter = state.meters.find(m => m.id === id);
     const date = clientInfo?.realizationDate;
-    updateMeterStatus(id, 'Vendu', location, diameter, type);
-    addMovement('Vente', location, 'Client Tiers', meter?.serialNumber || 'SANS S/N', undefined, clientInfo, undefined, id, diameter || meter?.diameter, date);
+    await updateMeterStatus(id, 'Vendu', location, diameter, type, undefined, undefined, meter?.brand, meter?.model, meter?.year);
+    addMovement('Vente', location, 'Client Tiers', meter?.serialNumber || 'SANS S/N', undefined, clientInfo, undefined, id, diameter || meter?.diameter, date, meter?.brand, meter?.model);
   };
 
-  const updateMeter = (id: string, updatedMeter: Partial<Meter>) => {
+  const updateMeter = async (id: string, updatedMeter: Partial<Meter>) => {
+    try {
+      await fetch(`${API_URL}/meters/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedMeter),
+      });
+    } catch (error) {
+      console.error('Failed to update meter in database:', error);
+    }
+
     setState(prev => {
       const oldMeter = prev.meters.find(m => m.id === id);
       
@@ -318,7 +364,17 @@ export const StockProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     });
   };
 
-  const updateMovement = (id: string, updatedMovement: Partial<Movement>) => {
+  const updateMovement = async (id: string, updatedMovement: Partial<Movement>) => {
+    try {
+      await fetch(`${API_URL}/movements/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedMovement),
+      });
+    } catch (error) {
+      console.error('Failed to update movement in database:', error);
+    }
+
     setState(prev => ({
       ...prev,
       movements: (prev.movements || []).map(m => 
@@ -327,79 +383,104 @@ export const StockProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }));
   };
 
-  const receiveStock = async (quantity: number, diameter: string, type: MeterType, date: string, location: string, serialNumber?: string, orderInfo?: Movement['orderInfo']) => {
+  const receiveStock = async (quantity: number, diameter: string, type: MeterType, date: string, location: string, brand: string, model: string, year: number, serialNumber?: string, orderInfo?: Movement['orderInfo']) => {
     const newMeters: Meter[] = [];
+    const now = Date.now();
     
     for (let i = 0; i < quantity; i++) {
-      const generatedSN = quantity === 1 && serialNumber ? serialNumber : (serialNumber ? `${serialNumber}-${i + 1}` : '');
-      
-      // Skip if SN already exists (strict uniqueness)
-      if (generatedSN && state.meters.some(m => m.serialNumber === generatedSN)) {
-        continue;
+      let generatedSN = '';
+      if (quantity === 1 && serialNumber) {
+        generatedSN = serialNumber;
+      } else if (serialNumber) {
+        generatedSN = `${serialNumber}-${i + 1}`;
+      } else {
+        // Génération d'un SN unique pour les lots sans numéro de série
+        generatedSN = `SANS-SN-${now.toString().slice(-6)}-${Math.random().toString(36).substr(2, 4)}-${i + 1}`;
       }
-
+      
       const newMeter: Meter = {
-        id: Math.random().toString(36).substr(2, 9) + '-' + i,
+        id: crypto.randomUUID(),
         serialNumber: generatedSN,
         diameter,
         type,
+        brand,
+        model,
+        year,
         status: 'Neuf',
         location,
         lastUpdate: new Date(date).toISOString(),
       };
 
       newMeters.push(newMeter);
-
-      // Sauvegarder chaque compteur dans la BDD
-      try {
-        await fetch(`${API_URL}/meters`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            serialNumber: generatedSN,
-            diameter,
-            type,
-            status: 'Neuf',
-            location,
-          }),
-        });
-      } catch (error) {
-        console.error('Failed to save meter to database:', error);
-      }
     }
 
     if (newMeters.length === 0) return;
 
-    const receptionMovement: Movement = {
-      id: Math.random().toString(36).substr(2, 9),
-      date: new Date(date).toISOString(),
-      type: 'Réception',
-      source: 'Fournisseur',
-      destination: location,
-      serialNumber: quantity === 1 && serialNumber ? serialNumber : `LOT DE ${newMeters.length} (${diameter})`,
-      diameter,
-      details: `Réception de ${newMeters.length} compteurs ${type} (sur ${quantity} demandés, les doublons ont été ignorés)`,
-      orderInfo,
-    };
-
-    // Sauvegarder le mouvement dans la BDD
     try {
+      if (quantity > 50) {
+        Swal.fire({
+          title: 'Enregistrement en cours...',
+          text: `Veuillez patienter pendant l'import de ${quantity} compteurs dans la base de données.`,
+          allowOutsideClick: false,
+          didOpen: () => {
+            Swal.showLoading();
+          }
+        });
+      }
+
+      // 1. Sauvegarde groupée des compteurs
+      const metersResponse = await fetch(`${API_URL}/meters/bulk`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ meters: newMeters }),
+      });
+
+      if (!metersResponse.ok) {
+        const errorData = await metersResponse.json();
+        throw new Error(errorData.details || 'Erreur lors de la sauvegarde groupée');
+      }
+
+      // 2. Création du mouvement de réception
+      const receptionMovement: Movement = {
+        id: crypto.randomUUID(),
+        date: new Date(date).toISOString(),
+        type: 'Réception',
+        source: 'Fournisseur',
+        destination: location,
+        serialNumber: quantity === 1 && serialNumber ? serialNumber : `LOT DE ${newMeters.length} (${diameter})`,
+        diameter,
+        brand,
+        model,
+        details: `Réception de ${newMeters.length} compteurs ${type}`,
+        orderInfo,
+      };
+
       await fetch(`${API_URL}/movements`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(receptionMovement),
       });
-      console.log('✅ Reception movement saved to database');
-    } catch (error) {
-      console.error('Failed to save movement to database:', error);
-    }
 
-    // Mettre à jour le state local
-    setState(prev => ({
-      ...prev,
-      meters: [...prev.meters, ...newMeters],
-      movements: [receptionMovement, ...(prev.movements || [])],
-    }));
+      // 3. Mise à jour du state local SEULEMENT en cas de succès BDD
+      setState(prev => ({
+        ...prev,
+        meters: [...prev.meters, ...newMeters],
+        movements: [receptionMovement, ...(prev.movements || [])],
+      }));
+
+      if (quantity > 50) {
+        Swal.close();
+      }
+      
+    } catch (error: any) {
+      console.error('❌ Failed to complete stock reception:', error);
+      Swal.fire({
+        icon: 'error',
+        title: 'Échec de l\'enregistrement',
+        text: error.message || 'Une erreur est survenue lors de la sauvegarde dans la base de données.',
+        confirmButtonColor: '#108bdd',
+      });
+    }
   };
 
   const lowStockAlerts = useMemo(() => {

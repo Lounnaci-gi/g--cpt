@@ -22,6 +22,9 @@ const Inventory: React.FC = () => {
   const [editSN, setEditSN] = useState('');
   const [editDiameter, setEditDiameter] = useState<MeterDiameter>('15/21 (DN15)');
   const [editType, setEditType] = useState<MeterType>('Volumétrique');
+  const [editBrand, setEditBrand] = useState('');
+  const [editModel, setEditModel] = useState('');
+  const [editYear, setEditYear] = useState(new Date().getFullYear());
 
   const filteredMeters = meters.filter(m => {
     const matchesSearch = m.serialNumber.toLowerCase().includes(searchTerm.toLowerCase());
@@ -62,6 +65,9 @@ const Inventory: React.FC = () => {
     setEditSN(meter.serialNumber);
     setEditDiameter(meter.diameter);
     setEditType(meter.type);
+    setEditBrand(meter.brand || '');
+    setEditModel(meter.model || '');
+    setEditYear(meter.year || new Date().getFullYear());
   };
 
   const handleSaveEdit = async () => {
@@ -89,6 +95,8 @@ const Inventory: React.FC = () => {
             <div style="background:#f0f8ff;border-radius:12px;padding:14px;margin-top:8px;font-size:13px;color:#222b38">
               <div style="margin-bottom:8px"><strong style="color:#0872c0">🏷️ S/N :</strong> ${editSN || '(inchangé)'}</div>
               <div style="margin-bottom:8px"><strong style="color:#0872c0">📏 Diamètre :</strong> ${editDiameter}</div>
+              <div style="margin-bottom:8px"><strong style="color:#0872c0">🏗️ Marque :</strong> ${editBrand}</div>
+              <div style="margin-bottom:8px"><strong style="color:#0872c0">📅 Année :</strong> ${editYear}</div>
               <div><strong style="color:#0872c0">🔧 Type :</strong> ${editType}</div>
             </div>
           </div>
@@ -106,7 +114,10 @@ const Inventory: React.FC = () => {
       updateMeter(editingMeter.id, {
         serialNumber: editSN,
         diameter: editDiameter,
-        type: editType
+        type: editType,
+        brand: editBrand,
+        model: editModel,
+        year: editYear
       });
       setEditingMeter(null);
     }
@@ -198,8 +209,9 @@ const Inventory: React.FC = () => {
             <thead>
               <tr className="bg-water-600 text-white font-mono text-[10px] uppercase tracking-widest">
                 <th className="p-4 text-left border-r border-white/10">Numéro de Série</th>
+                <th className="p-4 text-left border-r border-white/10">Marque/Modèle</th>
                 <th className="p-4 text-left border-r border-white/10">Diamètre</th>
-                <th className="p-4 text-left border-r border-white/10">Type</th>
+                <th className="p-4 text-left border-r border-white/10">Année</th>
                 <th className="p-4 text-left border-r border-white/10">État</th>
                 <th className="p-4 text-left border-r border-white/10">Localisation</th>
                 <th className="p-4 text-center">Actions</th>
@@ -214,8 +226,12 @@ const Inventory: React.FC = () => {
                 paginatedMeters.map((m, idx) => (
                   <tr key={`${m.id}-${idx}`} className={cn("border-b border-water-100 hover:bg-water-50/50 transition-colors", idx % 2 === 0 ? "bg-white/30" : "bg-transparent")}>
                     <td className="p-4 font-bold border-r border-water-100 text-water-900">{m.serialNumber || <span className="text-water-300 italic font-normal">SANS S/N</span>}</td>
+                    <td className="p-4 border-r border-water-100">
+                      <div className="text-water-900 font-bold">{m.brand}</div>
+                      <div className="text-water-400 text-[10px] uppercase truncate max-w-[120px]">{m.model}</div>
+                    </td>
                     <td className="p-4 border-r border-water-100 text-water-700">{m.diameter}</td>
-                    <td className="p-4 border-r border-water-100 text-water-500 opacity-80">{m.type}</td>
+                    <td className="p-4 border-r border-water-100 text-water-500">{m.year}</td>
                     <td className="p-4 border-r border-water-100">
                       <span className={cn("px-2 py-1 text-[10px] uppercase font-bold border rounded-md", statusColors[m.status])}>
                         {m.status}
@@ -374,17 +390,49 @@ const Inventory: React.FC = () => {
                 />
               </div>
 
-              <div className="space-y-2">
-                <label className="font-mono text-[10px] uppercase text-water-500 font-bold">Diamètre</label>
-                <select 
-                  className="w-full bg-white/50 border border-water-200 p-3 font-mono text-sm uppercase focus:outline-none rounded-xl"
-                  value={editDiameter}
-                  onChange={(e) => setEditDiameter(e.target.value)}
-                >
-                  {AVAILABLE_DIAMETERS.map(dn => (
-                    <option key={dn} value={dn}>{dn}</option>
-                  ))}
-                </select>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="font-mono text-[10px] uppercase text-water-500 font-bold">Marque</label>
+                  <input 
+                    type="text" 
+                    className="w-full bg-white/50 border border-water-200 p-3 font-mono text-sm uppercase focus:outline-none rounded-xl"
+                    value={editBrand}
+                    onChange={(e) => setEditBrand(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="font-mono text-[10px] uppercase text-water-500 font-bold">Modèle</label>
+                  <input 
+                    type="text" 
+                    className="w-full bg-white/50 border border-water-200 p-3 font-mono text-sm uppercase focus:outline-none rounded-xl"
+                    value={editModel}
+                    onChange={(e) => setEditModel(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="font-mono text-[10px] uppercase text-water-500 font-bold">Diamètre</label>
+                  <select 
+                    className="w-full bg-white/50 border border-water-200 p-3 font-mono text-sm uppercase focus:outline-none rounded-xl"
+                    value={editDiameter}
+                    onChange={(e) => setEditDiameter(e.target.value)}
+                  >
+                    {AVAILABLE_DIAMETERS.map(dn => (
+                      <option key={dn} value={dn}>{dn}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="font-mono text-[10px] uppercase text-water-500 font-bold">Année</label>
+                  <input 
+                    type="number" 
+                    className="w-full bg-white/50 border border-water-200 p-3 font-mono text-sm uppercase focus:outline-none rounded-xl"
+                    value={editYear}
+                    onChange={(e) => setEditYear(parseInt(e.target.value) || 2024)}
+                  />
+                </div>
               </div>
 
               <div className="space-y-2">

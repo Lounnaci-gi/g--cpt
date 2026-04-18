@@ -7,6 +7,9 @@ export interface Meter {
   serialNumber: string;
   diameter: MeterDiameter;
   type: MeterType;
+  brand: string;
+  model: string;
+  year: number;
   status: MeterStatus;
   location: string; // Agency or Antenna Name
   lastUpdate: string;
@@ -23,6 +26,8 @@ export interface Movement {
   destination: string;
   serialNumber: string;
   diameter?: string;
+  brand?: string;
+  model?: string;
   details?: string;
   clientInfo?: {
     code: string;

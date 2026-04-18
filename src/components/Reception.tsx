@@ -15,6 +15,9 @@ const Reception: React.FC = () => {
   const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [location, setLocation] = useState('Agence Commerciale');
   const [serialNumber, setSerialNumber] = useState('');
+  const [brand, setBrand] = useState('Itron');
+  const [model, setModel] = useState('Volumétrique');
+  const [year, setYear] = useState(new Date().getFullYear());
   
   // Order Info
   const [orderNumber, setOrderNumber] = useState('');
@@ -50,7 +53,8 @@ const Reception: React.FC = () => {
             <div style="background:#f0f8ff;border-radius:12px;padding:14px;margin-top:8px;font-size:13px;color:#222b38">
               <div style="margin-bottom:8px"><strong style="color:#0872c0">📦 Quantité :</strong> ${quantity} compteur(s)</div>
               <div style="margin-bottom:8px"><strong style="color:#0872c0">📏 Diamètre :</strong> ${diameter}</div>
-              <div style="margin-bottom:8px"><strong style="color:#0872c0">🔧 Type :</strong> ${type}</div>
+              <div style="margin-bottom:8px"><strong style="color:#0872c0">🏗️ Marque/Modèle :</strong> ${brand} ${model}</div>
+              <div style="margin-bottom:8px"><strong style="color:#0872c0">📅 Année :</strong> ${year}</div>
               <div style="margin-bottom:8px"><strong style="color:#0872c0">📍 Localisation :</strong> ${location}</div>
               ${serialNumber ? `<div><strong style="color:#0872c0">🏷️ S/N :</strong> ${serialNumber}</div>` : ''}
             </div>
@@ -73,7 +77,7 @@ const Reception: React.FC = () => {
       } : undefined;
 
       try {
-        await receiveStock(quantity, diameter, type, date, location, serialNumber, orderInfo);
+        await receiveStock(quantity, diameter, type, date, location, brand, model, year, serialNumber, orderInfo);
         Swal.fire({
           icon: 'success',
           title: 'Réception enregistrée !',
@@ -115,7 +119,7 @@ const Reception: React.FC = () => {
           </div>
 
           <div className="space-y-6 relative z-10">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
               <div className="space-y-2">
                 <label className="font-mono text-[10px] uppercase text-water-500 font-bold flex items-center gap-2">
                   <Calendar className="w-3 h-3" /> Date de Réception
@@ -138,6 +142,18 @@ const Reception: React.FC = () => {
                   className="w-full bg-white/50 border border-water-200 p-4 font-mono text-sm uppercase focus:outline-none rounded-xl"
                   value={quantity}
                   onChange={(e) => setQuantity(parseInt(e.target.value) || 0)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="font-mono text-[10px] uppercase text-water-500 font-bold flex items-center gap-2">
+                  Année de Fab.
+                </label>
+                <input 
+                  type="number" 
+                  className="w-full bg-white/50 border border-water-200 p-4 font-mono text-sm uppercase focus:outline-none rounded-xl"
+                  value={year}
+                  onChange={(e) => setYear(parseInt(e.target.value) || new Date().getFullYear())}
                 />
               </div>
             </div>
@@ -172,6 +188,34 @@ const Reception: React.FC = () => {
                   <option value="Électromagnétique">Électromagnétique</option>
                   <option value="Ultrasons">Ultrasons</option>
                 </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <label className="font-mono text-[10px] uppercase text-water-500 font-bold flex items-center gap-2">
+                  Marque
+                </label>
+                <input 
+                  type="text" 
+                  className="w-full bg-white/50 border border-water-200 p-4 font-mono text-sm uppercase focus:outline-none rounded-xl"
+                  value={brand}
+                  onChange={(e) => setBrand(e.target.value)}
+                  placeholder="EX: ITRON, SENSUS..."
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="font-mono text-[10px] uppercase text-water-500 font-bold flex items-center gap-2">
+                  Modèle
+                </label>
+                <input 
+                  type="text" 
+                  className="w-full bg-white/50 border border-water-200 p-4 font-mono text-sm uppercase focus:outline-none rounded-xl"
+                  value={model}
+                  onChange={(e) => setModel(e.target.value)}
+                  placeholder="EX: VOLUMÉTRIQUE, DN15..."
+                />
               </div>
             </div>
 
