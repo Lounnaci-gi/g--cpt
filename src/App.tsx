@@ -48,7 +48,10 @@ import {
   onSnapshot, 
   where, 
   orderBy,
-  limit
+  limit,
+  doc,
+  getDoc,
+  getDocs
 } from 'firebase/firestore';
 import { db, auth } from './lib/firebase';
 import { cn } from './lib/utils';
@@ -61,7 +64,6 @@ import {
   Threshold,
   Brand,
   Supplier,
-  Unit,
   Agency,
   Branch
 } from './types';
@@ -178,7 +180,6 @@ export default function App() {
   const [thresholds, setThresholds] = useState<Threshold[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
-  const [units, setUnits] = useState<Unit[]>([]);
   const [agencies, setAgencies] = useState<Agency[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [isMoveModalOpen, setMoveModalOpen] = useState(false);
@@ -231,10 +232,6 @@ export default function App() {
       setSuppliers(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Supplier)));
     });
 
-    const unsubUnits = onSnapshot(collection(db, 'units'), (snap) => {
-      setUnits(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Unit)));
-    });
-
     const unsubAgencies = onSnapshot(collection(db, 'agencies'), (snap) => {
       setAgencies(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Agency)));
     });
@@ -252,7 +249,6 @@ export default function App() {
       unsubThresholds();
       unsubBrands();
       unsubSuppliers();
-      unsubUnits();
       unsubAgencies();
       unsubBranches();
     };
@@ -316,6 +312,7 @@ export default function App() {
                   stores={stores} 
                   agencies={agencies}
                   diameters={diameters}
+                  suppliers={suppliers}
                 />
               </div>
             </motion.div>
@@ -482,7 +479,7 @@ export default function App() {
 
         <div className="bg-bg-card rounded-xl border border-border-main overflow-hidden shadow-xl">
           {activeTab === 'dashboard' && <DashboardView alerts={agencyAlerts} movements={movements} stores={stores} diameters={diameters} meters={agencyMeters} />}
-          {activeTab === 'mouvements' && <MovementsView movements={movements} stores={stores} meters={meters} diameters={diameters} />}
+          {activeTab === 'mouvements' && <MovementsView movements={movements} stores={stores} meters={meters} diameters={diameters} suppliers={suppliers} />}
           {activeTab === 'stock' && <InventoryView meters={meters} stores={stores} diameters={diameters} brands={brands} onMeterClick={(id: string) => setSelectedMeterId(id)} />}
           {activeTab === 'alerts' && <AlertsView stockLevels={stockLevels} thresholds={thresholds} stores={stores} diameters={diameters} />}
           {activeTab === 'reports' && (
@@ -606,7 +603,7 @@ function AlertsView({ stockLevels = [], thresholds = [], stores = [], diameters 
 function ReportsView({ movements = [], stores = [], agencies = [], branches = [], diameters = [], meters = [] }: any) {
   const [viewMode, setViewMode] = useState<'ANNUAL' | 'MONTHLY'>('ANNUAL');
   const [filterType, setFilterType] = useState<'GLOBAL' | 'AGENCY' | 'BRANCH'>('GLOBAL');
-  const [selectedId, setSelectedId] = useState<string>('ALL');
+  const [selectedId, setSelectedId] = useState<string>('');
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth());
 
@@ -623,14 +620,18 @@ function ReportsView({ movements = [], stores = [], agencies = [], branches = []
 
   // Stores relevant to current selection
   const relevantStoreIds = useMemo(() => {
-    if (filterType === 'GLOBAL') return stores.map((s: any) => s.id);
-    if (filterType === 'AGENCY' && selectedId !== 'ALL') {
+    // Si GLOBAL, retourner tous les magasins
+    if (filterType === 'GLOBAL') {
+      return stores.map((s: any) => s.id);
+    }
+    if (!selectedId) return [];
+    if (filterType === 'AGENCY') {
       return stores.filter((s: any) => s.agencyId === selectedId).map((s: any) => s.id);
     }
-    if (filterType === 'BRANCH' && selectedId !== 'ALL') {
+    if (filterType === 'BRANCH') {
       return stores.filter((s: any) => s.branchId === selectedId).map((s: any) => s.id);
     }
-    return stores.map((s: any) => s.id);
+    return [];
   }, [filterType, selectedId, stores]);
 
   // Current stock for relevant stores
@@ -750,7 +751,7 @@ function ReportsView({ movements = [], stores = [], agencies = [], branches = []
           Observation: m.observation || ''
         }));
     
-    downloadCSV(exportData, `bilan_${viewMode.toLowerCase()}_${filterType}_${selectedYear}.csv`);
+    downloadCSV(exportData, `bilan_${filterType.toLowerCase()}_${selectedId}_${selectedYear}.csv`);
   };
 
   return (
@@ -773,32 +774,35 @@ function ReportsView({ movements = [], stores = [], agencies = [], branches = []
             </div>
 
             <div className="space-y-1">
-              <label className="text-[10px] font-bold text-text-dim uppercase tracking-widest block">Type de Bilan</label>
+              <label className="text-[10px] font-bold text-text-dim uppercase tracking-widest block">Type de bilan</label>
               <div className="flex bg-bg-primary p-1 rounded-xl border border-border-main">
                 <button 
-                  onClick={() => { setFilterType('GLOBAL'); setSelectedId('ALL'); }}
+                  onClick={() => { setFilterType('GLOBAL'); setSelectedId(''); }}
                   className={cn("px-4 py-2 rounded-lg text-xs font-bold transition-all", filterType === 'GLOBAL' ? "bg-accent text-white shadow-md" : "text-text-dim hover:text-text-primary")}
                 >Global</button>
                 <button 
-                  onClick={() => { setFilterType('AGENCY'); setSelectedId('ALL'); }}
+                  onClick={() => { setFilterType('AGENCY'); setSelectedId(''); }}
                   className={cn("px-4 py-2 rounded-lg text-xs font-bold transition-all", filterType === 'AGENCY' ? "bg-accent text-white shadow-md" : "text-text-dim hover:text-text-primary")}
                 >Agence</button>
                 <button 
-                  onClick={() => { setFilterType('BRANCH'); setSelectedId('ALL'); }}
+                  onClick={() => { setFilterType('BRANCH'); setSelectedId(''); }}
                   className={cn("px-4 py-2 rounded-lg text-xs font-bold transition-all", filterType === 'BRANCH' ? "bg-accent text-white shadow-md" : "text-text-dim hover:text-text-primary")}
                 >Antenne</button>
               </div>
             </div>
-
+            
             {filterType !== 'GLOBAL' && (
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-text-dim uppercase tracking-widest block font-sans">Sélectionner</label>
+                <label className="text-[10px] font-bold text-text-dim uppercase tracking-widest block font-sans">
+                  {filterType === 'AGENCY' ? 'Sélectionner une agence' : 'Sélectionner une antenne'} *
+                </label>
                 <select 
                   value={selectedId}
                   onChange={(e) => setSelectedId(e.target.value)}
                   className="bg-bg-primary border border-border-main text-text-primary text-xs font-bold rounded-xl px-4 py-2 outline-none focus:ring-2 focus:ring-accent/20 transition-all min-w-[200px]"
+                  required
                 >
-                  <option value="ALL">Toutes les {filterType === 'AGENCY' ? 'agences' : 'antennes'}</option>
+                  <option value="">-- Choisir {filterType === 'AGENCY' ? 'une agence' : 'une antenne'} --</option>
                   {(filterType === 'AGENCY' ? agencies : branches).map((item: any) => (
                     <option key={item.id} value={item.id}>{item.label}</option>
                   ))}
@@ -843,6 +847,21 @@ function ReportsView({ movements = [], stores = [], agencies = [], branches = []
       </div>
 
       <div className="p-8 space-y-8">
+        {!selectedId ? (
+          <div className="bg-bg-card border border-border-main rounded-2xl p-12 text-center">
+            <div className="text-accent/50 mb-4 flex justify-center">
+              <TrendingDown size={48} />
+            </div>
+            <h4 className="text-lg font-bold text-text-primary mb-2">Aucune sélection</h4>
+            <p className="text-text-dim text-sm">
+              {filterType === 'GLOBAL' 
+                ? 'Le bilan global affichera tous les magasins' 
+                : `Veuillez sélectionner une ${filterType === 'AGENCY' ? 'agence' : 'antenne'} pour afficher le bilan`
+              }
+            </p>
+          </div>
+        ) : (
+          <>
         {viewMode === 'ANNUAL' ? (
           <>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -1000,6 +1019,8 @@ function ReportsView({ movements = [], stores = [], agencies = [], branches = []
               </div>
             </div>
           </div>
+        )}
+          </>
         )}
       </div>
     </div>
@@ -1201,7 +1222,7 @@ function DashboardView({ alerts = [], movements = [], stores = [], diameters = [
   );
 }
 
-function MovementsView({ movements = [], stores = [], meters = [], diameters = [] }: any) {
+function MovementsView({ movements = [], stores = [], meters = [], diameters = [], suppliers = [] }: any) {
   const [searchQuery, setSearchQuery] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -1269,15 +1290,29 @@ function MovementsView({ movements = [], stores = [], meters = [], diameters = [
   };
 
   const handleExport = () => {
-    const exportData = filteredMovements.map(mvt => ({
-      Date: mvt.date?.toDate().toLocaleDateString(),
-      Type: mvt.typeId,
-      Compteurs: getMeterSummary(mvt),
-      Arrivée: stores.find((s: any) => s.id === mvt.destStoreId)?.label || 'Vente/Pose',
-      Source: stores.find((s: any) => s.id === mvt.sourceStoreId)?.label || (mvt.typeId === 'APPRO' || mvt.typeId === 'TRANSF_RECU' ? 'Magasin Unité' : 'Fournisseur'),
-      Document: mvt.fileNumber || mvt.deliveryNote || '',
-      Intervenant: mvt.responsible || 'Admin'
-    }));
+    const exportData = filteredMovements.map(mvt => {
+      let sourceLabel = 'N/A';
+      if (mvt.typeId === 'APPRO' && mvt.supplierId) {
+        const supplier = suppliers.find((s: any) => s.id === mvt.supplierId);
+        sourceLabel = supplier ? supplier.name : 'Fournisseur';
+      } else if (mvt.typeId === 'APPRO' && mvt.sourceStoreId) {
+        sourceLabel = stores.find((s: any) => s.id === mvt.sourceStoreId)?.label || 'Magasin';
+      } else if (mvt.sourceStoreId) {
+        sourceLabel = stores.find((s: any) => s.id === mvt.sourceStoreId)?.label || 'Fournisseur';
+      } else if (mvt.typeId === 'APPRO' || mvt.typeId === 'TRANSF_RECU') {
+        sourceLabel = 'Fournisseur';
+      }
+      
+      return {
+        Date: mvt.date?.toDate().toLocaleDateString(),
+        Type: mvt.typeId,
+        Compteurs: getMeterSummary(mvt),
+        Arrivée: stores.find((s: any) => s.id === mvt.destStoreId)?.label || 'Vente/Pose',
+        Source: sourceLabel,
+        'N° Bon': mvt.deliveryNote || '',
+        Intervenant: mvt.responsible || 'Admin'
+      };
+    });
     downloadCSV(exportData, `mouvements_${new Date().toISOString().split('T')[0]}.csv`);
   };
 
@@ -1342,42 +1377,61 @@ function MovementsView({ movements = [], stores = [], meters = [], diameters = [
               <th className="p-5">Type</th>
               <th className="p-5">Compteur(s)</th>
               <th className="p-5 text-accent/80 font-black">SOURCE / ARRIVÉE</th>
-              <th className="p-5">Documents</th>
+              <th className="p-5">N° Bon</th>
               <th className="p-5">Intervenant</th>
             </tr>
           </thead>
           <tbody>
-            {filteredMovements.map((mvt: any) => (
-              <tr key={mvt.id} className="border-b border-border-main hover:bg-white/2 transition-colors">
-                <td className="p-5 font-mono text-[11px] text-text-dim">{mvt.date?.toDate().toLocaleDateString()}</td>
-                <td className="p-5">
-                  <span className={cn(
-                    "px-2 py-1 rounded text-[9px] font-bold tracking-widest uppercase border",
-                    mvt.typeId.includes('APPRO') ? "bg-success/10 text-success border-success/20" : "bg-accent/10 text-accent border-accent/20"
-                  )}>
-                    {mvt.typeId}
-                  </span>
-                </td>
-                <td className="p-5">
-                  <span className="text-[11px] font-medium text-text-primary">
-                    {getMeterSummary(mvt)}
-                  </span>
-                </td>
-                <td className="p-5 text-[13px]">
-                  <div className="flex flex-col">
-                    <span className="text-text-primary">Arrivée: {stores.find((s: any) => s.id === mvt.destStoreId)?.label || 'Vente/Pose'}</span>
-                    <span className="text-[10px] text-text-dim opacity-60">
-                      Source: {
-                        stores.find((s: any) => s.id === mvt.sourceStoreId)?.label || 
-                        (mvt.typeId === 'APPRO' || mvt.typeId === 'TRANSF_RECU' ? 'Magasin Unité' : 'Fournisseur')
-                      }
+            {filteredMovements.map((mvt: any) => {
+              // Déterminer la source
+              let sourceLabel = 'N/A';
+              if (mvt.typeId === 'APPRO') {
+                if (mvt.supplierId) {
+                  sourceLabel = suppliers.find((s: any) => s.id === mvt.supplierId)?.name || 'Fournisseur';
+                } else if (mvt.sourceStoreId) {
+                  sourceLabel = stores.find((s: any) => s.id === mvt.sourceStoreId)?.label || 'Magasin';
+                } else {
+                  sourceLabel = 'Fournisseur';
+                }
+              } else if (mvt.sourceStoreId) {
+                sourceLabel = stores.find((s: any) => s.id === mvt.sourceStoreId)?.label || 'N/A';
+              } else {
+                sourceLabel = 'N/A';
+              }
+
+              return (
+                <tr key={mvt.id} className="border-b border-border-main hover:bg-white/2 transition-colors">
+                  <td className="p-5 font-mono text-[11px] text-text-dim">{mvt.date?.toDate().toLocaleDateString()}</td>
+                  <td className="p-5">
+                    <span className={cn(
+                      "px-2 py-1 rounded text-[9px] font-bold tracking-widest uppercase border",
+                      mvt.typeId.includes('APPRO') ? "bg-success/10 text-success border-success/20" : "bg-accent/10 text-accent border-accent/20"
+                    )}>
+                      {mvt.typeId}
                     </span>
-                  </div>
-                </td>
-                <td className="p-5 text-[11px] font-mono text-text-dim">{mvt.fileNumber || mvt.deliveryNote || '--'}</td>
-                <td className="p-5 text-[13px] text-text-dim">{mvt.responsible || 'Admin'}</td>
-              </tr>
-            ))}
+                  </td>
+                  <td className="p-5">
+                    <span className="text-[11px] font-medium text-text-primary">
+                      {getMeterSummary(mvt)}
+                    </span>
+                  </td>
+                  <td className="p-5 text-[13px]">
+                    <div className="flex flex-col">
+                      <span className="text-text-primary">Arrivée: {stores.find((s: any) => s.id === mvt.destStoreId)?.label || 'Vente/Pose'}</span>
+                      <span className="text-[10px] text-text-dim opacity-60">
+                        Source: {sourceLabel}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="p-5">
+                    <div className="flex flex-col">
+                      <span className="text-[11px] font-mono font-bold text-text-primary">{mvt.deliveryNote || '--'}</span>
+                    </div>
+                  </td>
+                  <td className="p-5 text-[13px] text-text-dim">{mvt.responsible || 'Admin'}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -1783,7 +1837,7 @@ function MeterDetailView({ meter, movements = [], stores = [], brands = [] }: an
                         <p className="text-[9px] opacity-60">
                         Source: {
                           stores.find((s: any) => s.id === mvt.sourceStoreId)?.label || 
-                          (mvt.typeId === 'APPRO' || mvt.typeId === 'TRANSF_RECU' ? 'Magasin Unité' : 'Fournisseur')
+                          'Fournisseur'
                         }
                       </p>
                       </div>
@@ -1831,7 +1885,7 @@ function AdminView() {
         {activeSection === 'main' && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <AdminCard 
-              label="Unités & Agences" 
+              label="Agences & Antennes" 
               desc="Hiérarchie de l'entreprise" 
               onClick={() => setActiveSection('locations')}
               icon={<Building2 size={20} />} 
@@ -2073,15 +2127,29 @@ function SupplierForm({ initial, onClose }: { initial: Supplier | null, onClose:
   );
 }
 
-function NewMovementForm({ onClose, stores, agencies, diameters }: any) {
+function NewMovementForm({ onClose, stores, agencies, diameters, suppliers }: any) {
+  const [direction, setDirection] = useState<'ENTREE' | 'SORTIE'>('ENTREE');
   const [type, setType] = useState('APPRO');
   const [sourceStoreId, setSourceStoreId] = useState('');
   const [destStoreId, setDestStoreId] = useState('');
+  const [supplierId, setSupplierId] = useState('');
+  const [approSource, setApproSource] = useState<'SUPPLIER' | 'STORE'>('SUPPLIER');
+  const [deliveryNote, setDeliveryNote] = useState('');
+  const [movementDate, setMovementDate] = useState(new Date().toISOString().split('T')[0]);
   const [serialNumber, setSerialNumber] = useState('');
   const [quantity, setQuantity] = useState(1);
   const [diameterId, setDiameterId] = useState('');
   const [observation, setObservation] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Mettre à jour le type par défaut quand la direction change
+  useEffect(() => {
+    if (direction === 'ENTREE') {
+      setType('APPRO');
+    } else {
+      setType('REINTEGRATION');
+    }
+  }, [direction]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -2145,11 +2213,109 @@ function NewMovementForm({ onClose, stores, agencies, diameters }: any) {
         }
       }
 
+      // Préparer la provenance pour l'observation
+      let provenanceText = '';
+      let finalSourceStoreId = sourceStoreId;
+      
+      // Pour les approvisionnements depuis un magasin de l'unité (ENTRÉE)
+      if (direction === 'ENTREE' && approSource === 'STORE' && sourceStoreId) {
+        const sourceStore = stores.find((s: any) => s.id === sourceStoreId);
+        if (sourceStore) {
+          provenanceText = sourceStore.label;
+          finalSourceStoreId = sourceStoreId;
+        }
+      }
+      // Pour les SORTIES
+      else if (direction === 'SORTIE' && sourceStoreId) {
+        const sourceStore = stores.find((s: any) => s.id === sourceStoreId);
+        if (sourceStore) {
+          provenanceText = sourceStore.label;
+        }
+      }
+      // Si la destination est une antenne, la source est automatiquement son agence parente
+      else if (direction === 'ENTREE' && destStoreId) {
+        const destStore = stores.find((s: any) => s.id === destStoreId);
+        if (destStore && destStore.type === 'ANTENNE' && destStore.agencyId) {
+          const parentAgency = stores.find((s: any) => s.id === destStore.agencyId);
+          if (parentAgency) {
+            finalSourceStoreId = parentAgency.id;
+            provenanceText = parentAgency.label;
+          }
+        }
+      }
+
+      // Validation: vérifier la disponibilité du stock
+      if (finalSourceStoreId && (direction === 'SORTIE' || (direction === 'ENTREE' && approSource === 'STORE'))) {
+        // Pour les sorties ou entrée depuis magasin, vérifier le stock de la source
+        const stockByDiameter: Record<string, number> = {};
+        
+        // Récupérer les compteurs disponibles dans le magasin source
+        const metersQuery = query(
+          collection(db, 'meters'),
+          where('currentStoreId', '==', finalSourceStoreId),
+          where('status', '==', 'EN_STOCK')
+        );
+        
+        const metersSnapshot = await getDocs(metersQuery);
+        
+        // Compter par diamètre
+        metersSnapshot.forEach((doc) => {
+          const data = doc.data();
+          const diam = data.diameterId;
+          stockByDiameter[diam] = (stockByDiameter[diam] || 0) + 1;
+        });
+
+        // Vérifier si la quantité demandée est disponible pour le diamètre sélectionné
+        const availableStock = stockByDiameter[diameterId] || 0;
+        
+        if (availableStock < quantity) {
+          const sourceStore = stores.find((s: any) => s.id === finalSourceStoreId);
+          Toast.fire({
+            icon: 'error',
+            title: 'Stock insuffisant',
+            html: `
+              <div class="text-left">
+                <p><strong>${sourceStore?.label || 'Source'}</strong></p>
+                <p>Diamètre: <strong>${diameters.find(d => d.id === diameterId)?.value || diameterId}</strong></p>
+                <p>Stock disponible: <strong style="color: #EF4444;">${availableStock}</strong></p>
+                <p>Quantité demandée: <strong style="color: #F59E0B;">${quantity}</strong></p>
+              </div>
+            `
+          });
+          setLoading(false);
+          return;
+        }
+      }
+
+      // Validation: vérifier que le N° de Bon est renseigné
+      if (!deliveryNote.trim()) {
+        Toast.fire({
+          icon: 'warning',
+          title: 'Champ obligatoire',
+          text: 'Veuillez saisir le numéro de bon'
+        });
+        setLoading(false);
+        return;
+      }
+
+      // Validation: vérifier que la date est renseignée
+      if (!movementDate) {
+        Toast.fire({
+          icon: 'warning',
+          title: 'Champ obligatoire',
+          text: 'Veuillez saisir la date du mouvement'
+        });
+        setLoading(false);
+        return;
+      }
+
       await createMovement({
-        typeId: type,
-        sourceStoreId: sourceStoreId || undefined,
-        destStoreId: destStoreId || undefined,
-        observation,
+        typeId: direction === 'ENTREE' ? 'APPRO' : 'REINTEGRATION',
+        sourceStoreId: finalSourceStoreId || undefined,
+        destStoreId: direction === 'ENTREE' ? (destStoreId || undefined) : undefined,
+        supplierId: direction === 'ENTREE' && approSource === 'SUPPLIER' ? (supplierId || undefined) : undefined,
+        deliveryNote: deliveryNote.trim(),
+        observation: provenanceText ? `[Provenance: ${provenanceText}] ${observation}` : observation,
         createdBy: 'Admin'
       }, meterIds);
 
@@ -2173,19 +2339,92 @@ function NewMovementForm({ onClose, stores, agencies, diameters }: any) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
+      {/* Direction Selection */}
+      <div className="grid grid-cols-1 gap-6">
+        <FormGroup label="Direction de l'opération">
+          <div className="flex gap-4">
+            <label className="flex-1 cursor-pointer">
+              <input 
+                type="radio" 
+                name="direction" 
+                value="ENTREE" 
+                checked={direction === 'ENTREE'}
+                onChange={(e) => setDirection(e.target.value as 'ENTREE' | 'SORTIE')}
+                className="hidden"
+              />
+              <div className={cn(
+                "p-4 rounded-lg border-2 transition-all",
+                direction === 'ENTREE' 
+                  ? "border-success bg-success/5" 
+                  : "border-border-main bg-bg-primary hover:border-success/30"
+              )}>
+                <div className="flex items-center gap-3">
+                  <div className={cn(
+                    "w-4 h-4 rounded-full border-2 flex items-center justify-center",
+                    direction === 'ENTREE' ? "border-success" : "border-border-main"
+                  )}>
+                    {direction === 'ENTREE' && (
+                      <div className="w-2 h-2 rounded-full bg-success"></div>
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-text-primary">📥 Réception (Entrée)</p>
+                    <p className="text-[10px] text-text-dim">Approvisionnement, Transfert reçu</p>
+                  </div>
+                </div>
+              </div>
+            </label>
+
+            <label className="flex-1 cursor-pointer">
+              <input 
+                type="radio" 
+                name="direction" 
+                value="SORTIE" 
+                checked={direction === 'SORTIE'}
+                onChange={(e) => setDirection(e.target.value as 'ENTREE' | 'SORTIE')}
+                className="hidden"
+              />
+              <div className={cn(
+                "p-4 rounded-lg border-2 transition-all",
+                direction === 'SORTIE' 
+                  ? "border-danger bg-danger/5" 
+                  : "border-border-main bg-bg-primary hover:border-danger/30"
+              )}>
+                <div className="flex items-center gap-3">
+                  <div className={cn(
+                    "w-4 h-4 rounded-full border-2 flex items-center justify-center",
+                    direction === 'SORTIE' ? "border-danger" : "border-border-main"
+                  )}>
+                    {direction === 'SORTIE' && (
+                      <div className="w-2 h-2 rounded-full bg-danger"></div>
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-text-primary">📤 Réintégration (Sortie)</p>
+                    <p className="text-[10px] text-text-dim">Retour fournisseur, Vente, Branchement</p>
+                  </div>
+                </div>
+              </div>
+            </label>
+          </div>
+        </FormGroup>
+      </div>
+
       <div className="grid grid-cols-2 gap-6">
-        <FormGroup label="Opération">
-          <select 
-            value={type} 
-            onChange={(e) => setType(e.target.value)}
-            className="w-full bg-bg-primary border border-border-main rounded-lg p-3 text-sm text-text-primary focus:border-accent outline-none"
-          >
-            <option value="APPRO">Approvisionnement</option>
-            <option value="TRANSF_RECU">Transfert (Réception)</option>
-            <option value="TRANSF_EMIS">Transfert (Envoi)</option>
-            <option value="BRANCHEMENT">Branchement</option>
-            <option value="VENTE">Vente</option>
-          </select>
+        <FormGroup label="Direction">
+          <div className="flex items-center gap-2 p-3 bg-bg-primary border border-border-main rounded-lg">
+            {direction === 'ENTREE' ? (
+              <>
+                <span className="text-success text-lg">📥</span>
+                <span className="text-sm font-bold text-success">ENTRÉE (Réception)</span>
+              </>
+            ) : (
+              <>
+                <span className="text-danger text-lg">📤</span>
+                <span className="text-sm font-bold text-danger">SORTIE (Réintégration)</span>
+              </>
+            )}
+          </div>
         </FormGroup>
         
         <FormGroup label="Diamètre">
@@ -2200,6 +2439,174 @@ function NewMovementForm({ onClose, stores, agencies, diameters }: any) {
           </select>
         </FormGroup>
       </div>
+
+      <div className="grid grid-cols-2 gap-6">
+        <FormGroup label="N° de Bon">
+          <input 
+            type="text" 
+            value={deliveryNote}
+            onChange={(e) => setDeliveryNote(e.target.value)}
+            placeholder="Ex: BL-2024-001"
+            className="w-full bg-bg-primary border border-border-main rounded-lg p-3 text-sm font-mono text-text-primary focus:border-accent outline-none"
+            required
+          />
+        </FormGroup>
+
+        <FormGroup label="Date du mouvement">
+          <input 
+            type="date" 
+            value={movementDate}
+            onChange={(e) => setMovementDate(e.target.value)}
+            className="w-full bg-bg-primary border border-border-main rounded-lg p-3 text-sm text-text-primary focus:border-accent outline-none"
+            required
+          />
+        </FormGroup>
+      </div>
+
+      {direction === 'ENTREE' && (
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 gap-6">
+            <FormGroup label="Type d'approvisionnement">
+              <div className="flex gap-4">
+                <label className="flex-1 cursor-pointer">
+                  <input 
+                    type="radio" 
+                    name="approSource" 
+                    value="SUPPLIER" 
+                    checked={approSource === 'SUPPLIER'}
+                    onChange={(e) => setApproSource(e.target.value as 'SUPPLIER' | 'STORE')}
+                    className="hidden"
+                  />
+                  <div className={cn(
+                    "p-4 rounded-lg border-2 transition-all",
+                    approSource === 'SUPPLIER' 
+                      ? "border-accent bg-accent/5" 
+                      : "border-border-main bg-bg-primary hover:border-accent/30"
+                  )}>
+                    <div className="flex items-center gap-3">
+                      <div className={cn(
+                        "w-4 h-4 rounded-full border-2 flex items-center justify-center",
+                        approSource === 'SUPPLIER' ? "border-accent" : "border-border-main"
+                      )}>
+                        {approSource === 'SUPPLIER' && (
+                          <div className="w-2 h-2 rounded-full bg-accent"></div>
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-text-primary">Fournisseur Externe</p>
+                        <p className="text-[10px] text-text-dim">Approvisionnement depuis un fournisseur</p>
+                      </div>
+                    </div>
+                  </div>
+                </label>
+
+                <label className="flex-1 cursor-pointer">
+                  <input 
+                    type="radio" 
+                    name="approSource" 
+                    value="STORE" 
+                    checked={approSource === 'STORE'}
+                    onChange={(e) => setApproSource(e.target.value as 'SUPPLIER' | 'STORE')}
+                    className="hidden"
+                  />
+                  <div className={cn(
+                    "p-4 rounded-lg border-2 transition-all",
+                    approSource === 'STORE' 
+                      ? "border-accent bg-accent/5" 
+                      : "border-border-main bg-bg-primary hover:border-accent/30"
+                  )}>
+                    <div className="flex items-center gap-3">
+                      <div className={cn(
+                        "w-4 h-4 rounded-full border-2 flex items-center justify-center",
+                        approSource === 'STORE' ? "border-accent" : "border-border-main"
+                      )}>
+                        {approSource === 'STORE' && (
+                          <div className="w-2 h-2 rounded-full bg-accent"></div>
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-text-primary">Magasin de l'Unité</p>
+                        <p className="text-[10px] text-text-dim">Transfert depuis magasin principal</p>
+                      </div>
+                    </div>
+                  </div>
+                </label>
+              </div>
+            </FormGroup>
+          </div>
+
+          {approSource === 'SUPPLIER' && (
+            <div className="grid grid-cols-1 gap-6">
+              <FormGroup label="Fournisseur">
+                <select 
+                  value={supplierId} 
+                  onChange={(e) => setSupplierId(e.target.value)}
+                  className="w-full bg-bg-primary border border-border-main rounded-lg p-3 text-sm text-text-primary focus:border-accent outline-none"
+                  required
+                >
+                  <option value="">Sélectionner un fournisseur...</option>
+                  {suppliers.map((s: any) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} ({s.code}){s.contact ? ` - ${s.contact}` : ''}
+                    </option>
+                  ))}
+                </select>
+                {suppliers.length === 0 && (
+                  <p className="text-[10px] text-danger/70 mt-1">
+                    ⚠️ Aucun fournisseur configuré. Veuillez ajouter un fournisseur dans l'administration.
+                  </p>
+                )}
+              </FormGroup>
+            </div>
+          )}
+
+          {approSource === 'STORE' && (
+            <div className="grid grid-cols-1 gap-6">
+              <FormGroup label="Magasin source (Unité principale)">
+                <select 
+                  value={sourceStoreId} 
+                  onChange={(e) => setSourceStoreId(e.target.value)}
+                  className="w-full bg-bg-primary border border-border-main rounded-lg p-3 text-sm text-text-primary focus:border-accent outline-none"
+                  required
+                >
+                  <option value="">Sélectionner un magasin...</option>
+                  {stores.filter((s: any) => s.type === 'UNITE' || s.type === 'AGENCE').map((s: any) => (
+                    <option key={s.id} value={s.id}>
+                      🏢 {s.label} ({s.code})
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[10px] text-accent/70 mt-1">
+                  ℹ️ Les compteurs seront débités de ce magasin et crédités à la destination
+                </p>
+              </FormGroup>
+            </div>
+          )}
+        </div>
+      )}
+
+      {direction === 'SORTIE' && (
+        <div className="grid grid-cols-1 gap-6">
+          <FormGroup label="Magasin source (à débiter)">
+            <select 
+              value={sourceStoreId} 
+              onChange={(e) => setSourceStoreId(e.target.value)}
+              className="w-full bg-bg-primary border border-border-main rounded-lg p-3 text-sm text-text-primary focus:border-accent outline-none"
+              required
+            >
+              <option value="">Sélectionner le magasin source...</option>
+              {stores.filter((s: any) => s.type === 'AGENCE' || s.type === 'ANTENNE' || s.type === 'UNITE').map((s: any) => (
+                <option key={s.id} value={s.id}>
+                  🏢 {s.label} ({s.code})
+                </option>
+              ))}
+            </select>
+            <p className="text-[10px] text-accent/70 mt-1">
+              ℹ️ Les compteurs seront débités de ce magasin
+            </p>
+          </FormGroup>
+        </div>
+      )}
 
       <div className="grid grid-cols-3 gap-6">
         <div className="col-span-2">
@@ -2228,38 +2635,49 @@ function NewMovementForm({ onClose, stores, agencies, diameters }: any) {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-6">
-        <FormGroup label="Départ (Source - ex: Magasin Unité)">
-          <select 
-            value={sourceStoreId} 
-            onChange={(e) => setSourceStoreId(e.target.value)}
-            className="w-full bg-bg-primary border border-border-main rounded-lg p-3 text-sm text-text-primary focus:border-accent outline-none"
-          >
-            <option value="">Aucun (Fournisseur)</option>
-            {stores.map((s: any) => (
-              <option key={s.id} value={s.id}>
-                {s.label} {s.type === 'UNITE' ? '(Unité)' : (s.type === 'AGENCE' || s.type === 'AGENCY') ? '(Agence)' : ''}
-              </option>
-            ))}
-          </select>
-        </FormGroup>
-
-        <FormGroup label="Arrivée (Destination - ex: Agence)">
-          <select 
-            value={destStoreId} 
-            onChange={(e) => setDestStoreId(e.target.value)}
-            className="w-full bg-bg-primary border border-border-main rounded-lg p-3 text-sm text-text-primary focus:border-accent outline-none"
-            disabled={['BRANCHEMENT', 'VENTE'].includes(type)}
-          >
-            <option value="">Aucun</option>
-            {agencies.map((a: any) => (
-              <option key={a.id} value={a.id}>
-                {a.label} ({a.code})
-              </option>
-            ))}
-          </select>
-        </FormGroup>
-      </div>
+      {direction === 'ENTREE' && (
+        <div className="grid grid-cols-1 gap-6">
+          <FormGroup label="Destination">
+            <select 
+              value={destStoreId} 
+              onChange={(e) => setDestStoreId(e.target.value)}
+              className="w-full bg-bg-primary border border-border-main rounded-lg p-3 text-sm text-text-primary focus:border-accent outline-none"
+              required
+            >
+              <option value="">Sélectionner une destination...</option>
+              <optgroup label="Agences Commerciales">
+                {stores.filter((s: any) => s.type === 'AGENCE').map((s: any) => (
+                  <option key={s.id} value={s.id}>
+                    🏢 {s.label} ({s.code})
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label="Antennes">
+                {stores.filter((s: any) => s.type === 'ANTENNE').map((s: any) => (
+                  <option key={s.id} value={s.id}>
+                    📍 {s.label} ({s.code})
+                  </option>
+                ))}
+              </optgroup>
+            </select>
+            {type === 'APPRO' && destStoreId && stores.find((s: any) => s.id === destStoreId)?.type === 'AGENCE' && (
+              <p className="text-[10px] text-accent/70 mt-1">
+                ℹ️ Approvisionnement depuis un fournisseur vers le magasin de l'agence
+              </p>
+            )}
+            {type === 'APPRO' && destStoreId && stores.find((s: any) => s.id === destStoreId)?.type === 'ANTENNE' && (
+              <p className="text-[10px] text-accent/70 mt-1">
+                ℹ️ Transfert automatique depuis l'agence parente vers cette antenne
+              </p>
+            )}
+            {direction === 'ENTREE' && destStoreId && (
+              <p className="text-[10px] text-accent/70 mt-1">
+                ℹ️ Transfert reçu dans cette destination
+              </p>
+            )}
+          </FormGroup>
+        </div>
+      )}
 
       <FormGroup label="Note de mouvement">
         <textarea 
@@ -2308,17 +2726,13 @@ function AdminCard({ label, desc, onClick, icon, isAction }: any) {
 }
 
 function LocationsManager() {
-  const [activeTab, setActiveTab] = useState<'units' | 'agencies' | 'antennes'>('units');
-  const [units, setUnits] = useState<Unit[]>([]);
+  const [activeTab, setActiveTab] = useState<'agencies' | 'antennes'>('agencies');
   const [agencies, setAgencies] = useState<Agency[]>([]);
   const [antennes, setAntennes] = useState<Branch[]>([]);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
 
   useEffect(() => {
-    const unsubUnits = onSnapshot(collection(db, 'units'), (snap) => {
-      setUnits(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Unit)));
-    });
     const unsubAgencies = onSnapshot(collection(db, 'agencies'), (snap) => {
       setAgencies(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Agency)));
     });
@@ -2326,7 +2740,6 @@ function LocationsManager() {
       setAntennes(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Branch)));
     });
     return () => {
-      unsubUnits();
       unsubAgencies();
       unsubAntennes();
     };
@@ -2358,16 +2771,6 @@ function LocationsManager() {
     <div className="space-y-6">
       <div className="flex items-center gap-4 border-b border-border-main">
         <button 
-          onClick={() => setActiveTab('units')}
-          className={cn(
-            "pb-4 px-2 text-[10px] font-bold uppercase tracking-widest transition-all relative",
-            activeTab === 'units' ? "text-accent" : "text-text-dim hover:text-text-primary"
-          )}
-        >
-          Unités
-          {activeTab === 'units' && <motion.div layoutId="locTab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-accent" />}
-        </button>
-        <button 
           onClick={() => setActiveTab('agencies')}
           className={cn(
             "pb-4 px-2 text-[10px] font-bold uppercase tracking-widest transition-all relative",
@@ -2391,7 +2794,7 @@ function LocationsManager() {
 
       <div className="flex justify-between items-center">
         <h4 className="text-xs font-bold uppercase tracking-widest text-text-dim">
-          Liste des {activeTab === 'units' ? 'Unités' : activeTab === 'agencies' ? 'Agences' : 'Antennes'}
+          Liste des {activeTab === 'agencies' ? 'Agences' : 'Antennes'}
         </h4>
         <button 
           onClick={() => setShowAddForm(true)}
@@ -2402,22 +2805,12 @@ function LocationsManager() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {activeTab === 'units' && units.map(u => (
-          <LocationCard 
-            key={u.id} 
-            title={u.label} 
-            code={u.code} 
-            onEdit={() => { setEditingItem(u); setShowAddForm(true); }}
-            onDelete={() => handleDelete(u.id, 'units')}
-            icon={<Home size={20} />}
-          />
-        ))}
         {activeTab === 'agencies' && agencies.map(a => (
           <LocationCard 
             key={a.id} 
             title={a.label} 
             code={a.code} 
-            subtitle={`Unité: ${units.find(u => u.id === a.unitId)?.label || 'N/A'}`}
+            subtitle={a.address || 'Adresse non renseignée'}
             onEdit={() => { setEditingItem(a); setShowAddForm(true); }}
             onDelete={() => handleDelete(a.id, 'agencies')}
             icon={<Building2 size={20} />}
@@ -2452,7 +2845,7 @@ function LocationsManager() {
             >
               <div className="p-6 border-b border-border-main bg-white/2 flex justify-between items-center">
                 <h3 className="font-bold uppercase tracking-widest text-xs text-text-primary">
-                  {editingItem ? 'Modifier' : 'Nouveau'} {activeTab === 'units' ? 'Unité' : activeTab === 'agencies' ? 'Agence' : 'Antenne'}
+                  {editingItem ? 'Modifier' : 'Nouveau'} {activeTab === 'agencies' ? 'Agence' : 'Antenne'}
                 </h3>
                 <button onClick={() => { setShowAddForm(false); setEditingItem(null); }} className="text-text-dim hover:text-accent"><X size={18} /></button>
               </div>
@@ -2460,7 +2853,6 @@ function LocationsManager() {
                 type={activeTab}
                 initial={editingItem} 
                 onClose={() => { setShowAddForm(false); setEditingItem(null); }}
-                units={units}
                 agencies={agencies}
               />
             </motion.div>
@@ -2474,7 +2866,6 @@ function LocationsManager() {
 function StoresManager() {
   const [stores, setStores] = useState<Store[]>([]);
   const [agencies, setAgencies] = useState<Agency[]>([]);
-  const [units, setUnits] = useState<Unit[]>([]);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingStore, setEditingStore] = useState<Store | null>(null);
 
@@ -2485,13 +2876,9 @@ function StoresManager() {
     const unsubAgencies = onSnapshot(collection(db, 'agencies'), (snap) => {
       setAgencies(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Agency)));
     });
-    const unsubUnits = onSnapshot(collection(db, 'units'), (snap) => {
-      setUnits(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Unit)));
-    });
     return () => {
       unsubStores();
       unsubAgencies();
-      unsubUnits();
     };
   }, []);
 
@@ -2556,13 +2943,8 @@ function StoresManager() {
               <p className="text-[10px] font-mono text-accent uppercase">{s.code}</p>
               <div className="mt-3 space-y-1">
                 <p className="text-[9px] text-text-dim uppercase tracking-widest">
-                  Type: {s.type === 'UNITE' ? 'Magasin Unité' : s.type === 'AGENCY' || s.type === 'AGENCE' ? 'Magasin Agence' : 'Autre'}
+                  Type: {s.type === 'AGENCE' ? 'Magasin Agence' : 'Magasin Antenne'}
                 </p>
-                {s.unitId && (
-                  <p className="text-[9px] text-accent/70 italic uppercase">
-                    Rattaché à: {units.find(u => u.id === s.unitId)?.label || 'Unité inconnue'}
-                  </p>
-                )}
                 {s.agencyId && (
                   <p className="text-[9px] text-accent/70 italic uppercase">
                     Rattaché à: {agencies.find(a => a.id === s.agencyId)?.label || 'Agence inconnue'}
@@ -2591,7 +2973,6 @@ function StoresManager() {
               </div>
               <StoreForm 
                 initial={editingStore} 
-                units={units}
                 agencies={agencies}
                 onClose={() => { setShowAddForm(false); setEditingStore(null); }} 
               />
@@ -2603,12 +2984,11 @@ function StoresManager() {
   );
 }
 
-function StoreForm({ initial, units, agencies, onClose }: { initial: Store | null, units: Unit[], agencies: Agency[], onClose: () => void }) {
+function StoreForm({ initial, agencies, onClose }: { initial: Store | null, agencies: Agency[], onClose: () => void }) {
   const [formData, setFormData] = useState({
     label: initial?.label || '',
     code: initial?.code || '',
-    type: initial?.type || 'AGENCY',
-    unitId: initial?.unitId || '',
+    type: initial?.type || 'AGENCE',
     agencyId: initial?.agencyId || '',
   });
   const [loading, setLoading] = useState(false);
@@ -2621,8 +3001,7 @@ function StoreForm({ initial, units, agencies, onClose }: { initial: Store | nul
       
       const payload = {
         ...formData,
-        unitId: formData.type === 'UNITE' ? formData.unitId : null,
-        agencyId: formData.type === 'AGENCY' ? formData.agencyId : null,
+        agencyId: formData.type === 'AGENCE' ? formData.agencyId : null,
         updatedAt: serverTimestamp()
       };
 
@@ -2670,26 +3049,12 @@ function StoreForm({ initial, units, agencies, onClose }: { initial: Store | nul
           onChange={e => setFormData({ ...formData, type: e.target.value as any })}
           className="w-full bg-bg-primary border border-border-main rounded-lg p-3 text-sm text-text-primary focus:border-accent outline-none"
         >
-          <option value="UNITE">Magasin Unité</option>
-          <option value="AGENCY">Magasin Agence</option>
-          <option value="OTHER">Autre</option>
+          <option value="AGENCE">Magasin Agence</option>
+          <option value="ANTENNE">Magasin Antenne</option>
         </select>
       </FormGroup>
-
-      {formData.type === 'UNITE' && (
-        <FormGroup label="Rattachement Unité">
-          <select 
-            value={formData.unitId}
-            onChange={e => setFormData({ ...formData, unitId: e.target.value })}
-            className="w-full bg-bg-primary border border-border-main rounded-lg p-3 text-sm text-text-primary focus:border-accent outline-none"
-          >
-            <option value="">Sélectionner une unité...</option>
-            {units.map(u => <option key={u.id} value={u.id}>{u.label}</option>)}
-          </select>
-        </FormGroup>
-      )}
-
-      {formData.type === 'AGENCY' && (
+      
+      {formData.type === 'AGENCE' && (
         <FormGroup label="Rattachement Agence">
           <select 
             value={formData.agencyId}
@@ -2738,11 +3103,10 @@ function LocationCard({ title, code, subtitle, icon, onEdit, onDelete }: any) {
   );
 }
 
-function LocationForm({ type, initial, onClose, units, agencies }: any) {
+function LocationForm({ type, initial, onClose, agencies }: any) {
   const [formData, setFormData] = useState({
     label: initial?.label || '',
     code: initial?.code || '',
-    unitId: initial?.unitId || '',
     agencyId: initial?.agencyId || '',
     commune: initial?.commune || '',
     address: initial?.address || ''
@@ -2754,7 +3118,7 @@ function LocationForm({ type, initial, onClose, units, agencies }: any) {
     setLoading(true);
     try {
       const { setDoc, doc, collection, addDoc, updateDoc, serverTimestamp } = await import('firebase/firestore');
-      const collectionName = type === 'units' ? 'units' : type === 'agencies' ? 'agencies' : 'branches';
+      const collectionName = type === 'agencies' ? 'agencies' : 'branches';
       
       // Construire les données selon le type
       let dataToSave: any = {
@@ -2764,10 +3128,7 @@ function LocationForm({ type, initial, onClose, units, agencies }: any) {
       };
 
       // Ajouter les champs spécifiques selon le type
-      if (type === 'units') {
-        if (formData.address) dataToSave.address = formData.address;
-      } else if (type === 'agencies') {
-        dataToSave.unitId = formData.unitId;
+      if (type === 'agencies') {
         if (formData.address) dataToSave.address = formData.address;
       } else if (type === 'antennes') {
         dataToSave.agencyId = formData.agencyId;
@@ -2813,20 +3174,6 @@ function LocationForm({ type, initial, onClose, units, agencies }: any) {
           className="w-full bg-bg-primary border border-border-main rounded-lg p-3 text-sm text-text-primary focus:border-accent outline-none"
         />
       </FormGroup>
-
-      {type === 'agencies' && (
-        <FormGroup label="Unité parent">
-          <select 
-            required
-            value={formData.unitId}
-            onChange={e => setFormData({ ...formData, unitId: e.target.value })}
-            className="w-full bg-bg-primary border border-border-main rounded-lg p-3 text-sm text-text-primary focus:border-accent outline-none"
-          >
-            <option value="">Sélectionner une unité...</option>
-            {units.map((u: any) => <option key={u.id} value={u.id}>{u.label}</option>)}
-          </select>
-        </FormGroup>
-      )}
 
       {type === 'antennes' && (
         <FormGroup label="Agence parente">

@@ -1,21 +1,14 @@
 import { Timestamp } from 'firebase/firestore';
 
 export type MeterStatus = 'EN_STOCK' | 'POSE' | 'INSTALLE' | 'VENDU' | 'RETOURNE';
-export type StoreType = 'UNITE' | 'AGENCE' | 'ANTENNE';
+export type StoreType = 'AGENCE' | 'ANTENNE';
 export type MovementDirection = 'ENTREE' | 'SORTIE';
-
-export interface Unit {
-  id: string;
-  code: string;
-  label: string;
-  address?: string;
-}
 
 export interface Agency {
   id: string;
   code: string;
   label: string;
-  unitId: string;
+  address?: string;
 }
 
 export interface Branch {
@@ -31,7 +24,6 @@ export interface Store {
   label: string;
   code: string;
   type: StoreType;
-  unitId?: string;
   agencyId?: string;
   branchId?: string;
 }

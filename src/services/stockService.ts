@@ -166,11 +166,11 @@ export async function setupInitialData() {
   });
 
   // Sample Store and Threshold if none exists
-  const storeRef = doc(db, 'stores', 'mag_central');
+  const storeRef = doc(db, 'stores', 'agence_centrale');
   batch.set(storeRef, {
-    label: 'Magasin Central',
-    type: 'UNITE',
-    code: 'MC01'
+    label: 'Agence Centrale',
+    type: 'AGENCE',
+    code: 'AC01'
   });
 
   const thresholdRef = doc(db, 'thresholds', 'mc_dn15');
