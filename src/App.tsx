@@ -258,14 +258,39 @@ export default function App() {
     };
   }, [isAuthenticated]);
 
+  // Calculer les IDs des magasins d'agence uniquement
+  const agencyStoreIds = useMemo(() => {
+    return stores
+      .filter((s: any) => s.type === 'AGENCE' || s.type === 'AGENCY')
+      .map((s: any) => s.id);
+  }, [stores]);
+
+  // Filtrer les compteurs des agences uniquement
+  const agencyMeters = useMemo(() => {
+    return meters.filter((m: any) => agencyStoreIds.includes(m.currentStoreId));
+  }, [meters, agencyStoreIds]);
+
+  // Calculer toutes les alertes
+  const allAlerts = useMemo(() => {
+    return stockLevels.filter(stock => {
+      const threshold = thresholds.find(t => t.storeId === stock.storeId && t.diameterId === stock.diameterId);
+      return threshold && stock.quantity < threshold.minQuantity;
+    });
+  }, [stockLevels, thresholds]);
+
+  // Filtrer les alertes des agences uniquement
+  const agencyAlerts = useMemo(() => {
+    return allAlerts.filter((alert: any) => {
+      const store = stores.find((s: any) => s.id === alert.storeId);
+      return store && (store.type === 'AGENCE' || store.type === 'AGENCY');
+    });
+  }, [allAlerts, stores]);
+
   if (!isAuthenticated) {
     return <LoginView onEnter={() => setAuthenticated(true)} />;
   }
 
-  const alerts = stockLevels.filter(stock => {
-    const threshold = thresholds.find(t => t.storeId === stock.storeId && t.diameterId === stock.diameterId);
-    return threshold && stock.quantity < threshold.minQuantity;
-  });
+  const alerts = allAlerts;
 
   return (
     <div className="flex h-screen bg-bg-primary font-sans text-text-primary">
@@ -444,19 +469,19 @@ export default function App() {
 
         {activeTab === 'dashboard' && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-12">
-            <StatCard label="Stock Total" value={meters.length.toString()} trend="+5% vs mois dernier" />
-            <StatCard label="En Stock" value={meters.filter(m => m.status === 'EN_STOCK').length.toString()} />
+            <StatCard label="Stock Total (Agences)" value={agencyMeters.length.toString()} trend={`${agencyMeters.filter(m => m.status === 'EN_STOCK').length} en stock`} />
+            <StatCard label="En Stock" value={agencyMeters.filter(m => m.status === 'EN_STOCK').length.toString()} />
             <StatCard 
-              label="Valeur Stock" 
-              value={new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'DZD', maximumFractionDigits: 0 }).format(meters.filter(m => m.status === 'EN_STOCK').length * 4500)} 
+              label="Installés" 
+              value={agencyMeters.filter(m => m.status === 'INSTALLE' || m.status === 'POSE').length.toString()} 
             />
-            <StatCard label="Hors Stock" value={meters.filter(m => m.status !== 'EN_STOCK').length.toString()} />
-            <StatCard label="Alertes Seuil" value={alerts.length.toString()} isAlert={alerts.length > 0} />
+            <StatCard label="Hors Stock" value={agencyMeters.filter(m => m.status !== 'EN_STOCK').length.toString()} />
+            <StatCard label="Alertes Seuil" value={agencyAlerts.length.toString()} isAlert={agencyAlerts.length > 0} />
           </div>
         )}
 
         <div className="bg-bg-card rounded-xl border border-border-main overflow-hidden shadow-xl">
-          {activeTab === 'dashboard' && <DashboardView alerts={alerts} movements={movements} stores={stores} diameters={diameters} meters={meters} />}
+          {activeTab === 'dashboard' && <DashboardView alerts={agencyAlerts} movements={movements} stores={stores} diameters={diameters} meters={agencyMeters} />}
           {activeTab === 'mouvements' && <MovementsView movements={movements} stores={stores} meters={meters} diameters={diameters} />}
           {activeTab === 'stock' && <InventoryView meters={meters} stores={stores} diameters={diameters} brands={brands} onMeterClick={(id: string) => setSelectedMeterId(id)} />}
           {activeTab === 'alerts' && <AlertsView stockLevels={stockLevels} thresholds={thresholds} stores={stores} diameters={diameters} />}
@@ -2183,7 +2208,7 @@ function NewMovementForm({ onClose, stores, agencies, diameters }: any) {
               type="text" 
               value={serialNumber}
               onChange={(e) => setSerialNumber(e.target.value)}
-              placeholder="Identification du compteur"
+              placeholder="Identification du compteur (optionnel)"
               className="w-full bg-bg-primary border border-border-main rounded-lg p-3 text-sm font-mono text-text-primary focus:border-accent outline-none"
             />
           </FormGroup>

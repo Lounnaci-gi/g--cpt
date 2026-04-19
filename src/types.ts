@@ -1,6 +1,6 @@
 import { Timestamp } from 'firebase/firestore';
 
-export type MeterStatus = 'EN_STOCK' | 'POSE' | 'VENDU' | 'RETOURNE';
+export type MeterStatus = 'EN_STOCK' | 'POSE' | 'INSTALLE' | 'VENDU' | 'RETOURNE';
 export type StoreType = 'UNITE' | 'AGENCE' | 'ANTENNE';
 export type MovementDirection = 'ENTREE' | 'SORTIE';
 
