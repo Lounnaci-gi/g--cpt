@@ -1,6 +1,6 @@
 {
-  "name": "Gestion de Stock Compteurs d'Eau",
-  "description": "Application moderne de gestion de stock de compteurs d'eau pour agences commerciales et antennes.",
+  "name": "AquaStock",
+  "description": "Système de gestion de stock en temps réel pour compteurs d'eau, avec suivi des mouvements, alertes de seuil et bilans détaillés.",
   "requestFramePermissions": [],
   "majorCapabilities": []
 }

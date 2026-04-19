@@ -1,0 +1,174 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if isSignedIn();
+    }
+
+    // --- Helpers ---
+    function isSignedIn() {
+      // Relaxed for demo environment until Auth Providers are enabled in the console
+      return true; 
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- Validation Blueprints ---
+    function isValidUnit(data) {
+      return data.keys().hasAll(['code', 'label']) && data.keys().size() >= 2
+        && data.code is string && data.code.size() <= 20
+        && data.label is string && data.label.size() <= 100;
+    }
+
+    function isValidAgency(data) {
+      return data.keys().hasAll(['code', 'label', 'unitId']) && data.keys().size() >= 3
+        && data.code is string && data.code.size() <= 20
+        && data.label is string && data.label.size() <= 100
+        && isValidId(data.unitId);
+    }
+
+    function isValidBranch(data) {
+      return data.keys().hasAll(['code', 'label', 'agencyId']) && data.keys().size() >= 3
+        && data.code is string && data.code.size() <= 20
+        && data.label is string && data.label.size() <= 100
+        && isValidId(data.agencyId);
+    }
+
+    function isValidStore(data) {
+      return data.keys().hasAll(['label', 'type']) && data.keys().size() >= 2
+        && data.label is string && data.label.size() <= 100
+        && data.type in ['UNITE', 'AGENCE', 'ANTENNE']
+        && (!data.keys().hasAny(['code']) || (data.code is string && data.code.size() <= 20));
+    }
+
+    function isValidMeter(data) {
+      return data.keys().hasAll(['serialNumber', 'diameterId', 'brandId', 'status']) && data.keys().size() >= 4
+        && data.serialNumber is string && data.serialNumber.size() <= 50
+        && isValidId(data.diameterId)
+        && isValidId(data.brandId)
+        && data.status in ['EN_STOCK', 'POSE', 'VENDU', 'RETOURNE'];
+    }
+
+    function isValidMovement(data) {
+      return data.keys().hasAll(['date', 'typeId']) && data.keys().size() >= 2
+        && data.date is timestamp
+        && isValidId(data.typeId);
+    }
+
+    function isValidStockLevel(data) {
+      return data.keys().hasAll(['storeId', 'diameterId', 'quantity']) && data.keys().size() == 3
+        && isValidId(data.storeId)
+        && isValidId(data.diameterId)
+        && data.quantity is int && data.quantity >= 0;
+    }
+
+    function isValidThreshold(data) {
+      return data.keys().hasAll(['storeId', 'diameterId', 'minQuantity']) && data.keys().size() == 3
+        && isValidId(data.storeId)
+        && isValidId(data.diameterId)
+        && data.minQuantity is int && data.minQuantity >= 0;
+    }
+
+    // --- Rules ---
+
+    match /units/{unitId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidUnit(incoming()) && isValidId(unitId);
+      allow update: if isSignedIn() && isValidUnit(incoming()) 
+        && incoming().diff(existing()).affectedKeys().hasOnly(['label', 'address']);
+    }
+
+    match /agencies/{agencyId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidAgency(incoming()) && isValidId(agencyId);
+      allow update: if isSignedIn() && isValidAgency(incoming())
+        && incoming().diff(existing()).affectedKeys().hasOnly(['label', 'address']);
+    }
+
+    match /branches/{branchId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidBranch(incoming()) && isValidId(branchId);
+      allow update: if isSignedIn() && isValidBranch(incoming())
+        && incoming().diff(existing()).affectedKeys().hasOnly(['label', 'commune']);
+    }
+
+    match /stores/{storeId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidStore(incoming()) && isValidId(storeId);
+      allow update: if isSignedIn() && isValidStore(incoming())
+        && incoming().diff(existing()).affectedKeys().hasOnly(['label']);
+    }
+
+    match /brands/{brandId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && isValidId(brandId);
+    }
+
+    match /diameters/{diameterId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && isValidId(diameterId);
+    }
+
+    match /meters/{meterId} {
+      allow read: if isSignedIn();
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() && isValidMeter(incoming());
+      allow update: if isSignedIn() && isValidMeter(incoming())
+        && (
+          incoming().diff(existing()).affectedKeys().hasOnly(['status', 'currentStoreId', 'lastMovementDate'])
+        );
+    }
+
+    match /movementTypes/{typeId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn(); 
+    }
+
+    match /movements/{mvtId} {
+      allow read: if isSignedIn();
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() && isValidMovement(incoming());
+      
+      match /lines/{lineId} {
+        allow read: if isSignedIn();
+        allow create: if isSignedIn() && isValidId(lineId);
+      }
+    }
+
+    match /stockLevels/{stockId} {
+      allow read: if isSignedIn();
+      allow list: if isSignedIn();
+      allow create, update: if isSignedIn() && isValidStockLevel(incoming());
+    }
+
+    match /thresholds/{thresholdId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && isValidThreshold(incoming());
+    }
+    
+    match /suppliers/{supplierId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+    
+    match /subscribers/{subscriberId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+  }
+}
